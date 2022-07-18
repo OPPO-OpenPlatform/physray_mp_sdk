@@ -1,0 +1,138 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v1.1.45",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "Carafe",
+      "rotation": [
+        0,
+        0,
+        -0.19475308060646057,
+        0.9808523058891296
+      ],
+      "scale": [
+        0.20564888417720795,
+        0.20564888417720795,
+        0.20564888417720795
+      ],
+      "translation": [
+        0.018831580877304077,
+        2.9183483123779297,
+        0
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "extensions" : {
+        "KHR_materials_transmission" : {
+            "transmissionFactor" : 1
+        }
+      },
+      "name": "Material.006",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1,
+          1,
+          1,
+          0
+        ],
+        "roughnessFactor": 0,
+        "metallicFactor": 0
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Circle.005",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 1952,
+      "max": [
+        7.602190017700195,
+        0.004458114970475435,
+        2.020556688308716
+      ],
+      "min": [
+        -3.1808102130889893,
+        -13.574821472167969,
+        -1.9158847332000732
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 1952,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 1952,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 11520,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 23424,
+      "byteOffset": 0
+    },
+    {
+      "buffer": 0,
+      "byteLength": 23424,
+      "byteOffset": 23424
+    },
+    {
+      "buffer": 0,
+      "byteLength": 15616,
+      "byteOffset": 46848
+    },
+    {
+      "buffer": 0,
+      "byteLength": 23040,
+      "byteOffset": 62464
+    }
+  ],
+  "buffers": [
+    {
+      "uri": "carafe.bin",
+      "byteLength": 85504
+    }
+  ]
+}

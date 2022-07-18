@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.innopeak.ph.sdk.sample.hub">
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PHSampleHub">
+
+        <!-- define activity class for the demo screen -->
+        <activity
+            android:name=".Demo"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar.FullScreen" />
+
+        <!-- This is the demo hub screen where user can select different demo -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Native activity -->
+        <activity
+            android:name=".NativeActivity"
+            android:exported="false"
+            android:screenOrientation="landscape">
+            <meta-data android:name="android.app.lib_name" android:value="hub" />
+        </activity>
+
+        <!-- Garage activity -->
+        <activity
+            android:name=".GarageActivity"
+            android:exported="true"
+            android:label="@string/garage_app_name"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <meta-data android:name="android.app.lib_name" android:value="hub" />
+        </activity>
+
+        <!-- OPPO-Ring activity -->
+        <activity
+            android:name=".RingActivity"
+            android:exported="true"
+            android:label="@string/ring_app_name"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <meta-data android:name="android.app.lib_name" android:value="hub" />
+        </activity>
+
+        <!-- PathTracerDemo activity -->
+        <activity
+            android:name=".PTDemoActivity"
+            android:exported="true"
+            android:label="@string/ptdemo_app_name"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <meta-data android:name="android.app.lib_name" android:value="hub" />
+        </activity>
+    </application>
+
+</manifest>

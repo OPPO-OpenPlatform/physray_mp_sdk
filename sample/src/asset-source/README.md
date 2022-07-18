@@ -1,0 +1,1 @@
+This folder contains source materials used to generate assets in the asset folder.
