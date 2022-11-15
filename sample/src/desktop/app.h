@@ -19,6 +19,7 @@ public:
         bool     gpuBvh          = false;
         bool     offscreen       = false;
         bool     useVmaAllocator = true;
+        bool     showUI          = true;
 
         /// If set to a folder path, this will output the app's screen to a series of images.
         std::string recordPath = "";
@@ -57,6 +58,7 @@ public:
             o.gpuBvh,
             o.offscreen,
             o.vsync,
+            o.showUI,
             [&](const ph::va::VulkanGlobalInfo & vgi) {
                 ph::va::AutoHandle<VkSurfaceKHR> s;
                 if (!o.offscreen) { PH_VA_REQUIRE(glfwCreateWindowSurface(vgi.instance, _window, vgi.allocator, s.prepare(vgi))); }

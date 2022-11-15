@@ -22,7 +22,7 @@ struct ModelViewer : SimpleScene {
         uint32_t maxFrames      = 0;    ///< quit the app after certian number of frames. 0 means infinie number of frames.
         bool     accum          = true; ///< enable accumulative rendering
         bool     animated       = true; ///< enable animation when app starts.
-        bool     showUI         = true; ///< show ImGUI based in-game GUI when set to true.
+        bool     showUI         = false; ///< show ImGUI based in-game GUI when set to true.
         bool     showFrameTimes = true; ///< show detail frame time break down in the in-game GUI.
         bool     showDebugUI    = true; ///< show debug menu in the in-game gui.
 

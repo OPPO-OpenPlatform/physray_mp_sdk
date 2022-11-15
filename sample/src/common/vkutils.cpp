@@ -369,18 +369,20 @@ void SimpleApp::resize(void * window, uint32_t w, uint32_t h) {
         PH_VA_REQUIRE(vkCreateFramebuffer(vgi.device, &ci, vgi.allocator, _framebuffers[i].prepare(vgi)));
     }
 
-    // Must release old UI instance before creating new one. Or else, the destructor of SimpleUI class will
-    // reset and clear the global ImGui context.
-    _ui.reset();
+    if (_cp.showUI) {
+        // Must release old UI instance before creating new one. Or else, the destructor of SimpleUI class will
+        // reset and clear the global ImGui context.
+        _ui.reset();
 
-    // create UI
-    _ui.reset(new SimpleUI({
-        .vsp               = _dev->graphicsQ(),
-        .window            = _sw->initParameters().window,
-        .width             = w,
-        .height            = h,
-        .maxInFlightFrames = _loop->cp().maxInFlightFrames,
-    }));
+        // create UI
+        _ui.reset(new SimpleUI({
+            .vsp               = _dev->graphicsQ(),
+            .window            = _sw->initParameters().window,
+            .width             = w,
+            .height            = h,
+            .maxInFlightFrames = _loop->cp().maxInFlightFrames,
+        }));
+    }
 
     // create/resize scene in a background thread to avoid blocking the main thread.
     _loaded  = false;
@@ -407,7 +409,7 @@ void SimpleApp::resize(void * window, uint32_t w, uint32_t h) {
     });
 
     // For offsreen rendering, we'll wait for loading to finish.
-    if (_cp.offscreen) {
+    if (!_cp.showUI || _cp.offscreen) {
         _loading.wait();
         PH_ASSERT(_loaded);
     }
@@ -437,7 +439,7 @@ bool SimpleApp::render() {
                 _scene->cpuFrameTimes.end();
                 _scene->cpuFrameTimes.frame();
             } else {
-                recordLoadingScreen(rp);
+                if (_cp.showUI) { recordLoadingScreen(rp); }
                 // TODO: render loading screen
             }
         })) {

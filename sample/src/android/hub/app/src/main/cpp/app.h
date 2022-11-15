@@ -39,6 +39,9 @@ public:
 
         // Set to true to defer to VMA for device memory allocations.
         bool useVmaAllocator = true;
+
+        // set to ture to enable UI
+        bool showUI = false;
     };
 
     AndroidDemoApp(const ConstructParameters & cp): _cp(cp), _last({}) {
@@ -61,6 +64,7 @@ public:
                    _cp.gpuBvh,
                    false, // offscreen
                    true,  // turn on vsync
+                   _cp.showUI,
                    [this](const ph::va::VulkanGlobalInfo & vgi) {
                        // create a surface out of the native window
                        ph::va::AutoHandle<VkSurfaceKHR> s;

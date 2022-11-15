@@ -1,6 +1,9 @@
 #include "drag-motion-controller.h"
 
 void DragMotionController::onTouch(const TouchEvent & curr) {
+    // Do not correspond to the user's touch event, when _firstPersonController is not initialized
+    if (_firstPersonController == nullptr) return;
+
     // Make sure our information on the window's size is still accurate.
     _windowWidth = ((float) ANativeWindow_getWidth(_window));
 

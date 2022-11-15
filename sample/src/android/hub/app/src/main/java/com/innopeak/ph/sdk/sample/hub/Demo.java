@@ -3,12 +3,16 @@ package com.innopeak.ph.sdk.sample.hub;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.TextView;
 
 public class Demo extends AppCompatActivity {
 
+    private static final String TAG = "phantom-sdk";
     TextView _fpsTextView;
+    VulkanSurfaceView           view;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,7 +27,7 @@ public class Demo extends AppCompatActivity {
         _fpsTextView = findViewById(R.id.fpsTextView);
 
         Bundle            b    = getIntent().getExtras();
-        VulkanSurfaceView view = findViewById(R.id.mainSurfaceView);
+        view                   = findViewById(R.id.mainSurfaceView);
         RenderOptions     ro   = view.get_options();
         ro.name                = b.getString("name");
         ro.rasterized          = !b.getBoolean("rayTraced");
@@ -41,5 +45,14 @@ public class Demo extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (!view.getRenderInitState() && keyCode == KeyEvent.KEYCODE_BACK) {
+            Log.e(TAG, "skip respond back key when render init loading");
+            return false;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 }

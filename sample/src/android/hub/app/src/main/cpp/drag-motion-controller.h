@@ -47,7 +47,7 @@ private:
     int _rotateTouchId = -1;
 
     /// The controller this is manipulating.
-    FirstPersonController * _firstPersonController;
+    FirstPersonController * _firstPersonController = nullptr;
 
     /// How far from starting position before we start moving.
     float _threshold = 8.0f;

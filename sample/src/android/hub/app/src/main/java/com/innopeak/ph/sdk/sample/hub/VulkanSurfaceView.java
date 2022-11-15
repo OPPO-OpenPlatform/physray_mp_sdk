@@ -45,21 +45,17 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
         if (null != l) l.onFpsUpdated(fps);
     }
 
-    @Override
-    public void surfaceCreated(@NonNull SurfaceHolder holder) {
-        Log.d(TAG, "surfaceCreated");
-        _options.surface = holder.getSurface();
-        _options.assets  = getContext().getAssets();
-        _renderer        = new VulkanRenderer(this, _options);
-        _renderer.start();
+    public boolean getRenderInitState() {
+        if (_renderer != null)
+            return _renderer._nativeInited.get();
+        else
+            return false;
     }
 
-    @Override
-    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-        Log.d(TAG, "surfaceDestroyed");
-
+    private void disableVulkanRenderer() {
+        Log.d(TAG, "disableVulkanRenderer");
         // notify render thread to quit
-        _renderer.running.set(false);
+        VulkanRenderer.running.set(false);
 
         // wait for render thread to finish before returning. If we don't do this, then the surface
         // could get destroyed before vulkan resources are released. It could cause vulkan APi to
@@ -70,8 +66,32 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
     }
 
     @Override
+    public void surfaceCreated(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated");
+
+        if (VulkanRenderer.running.get()) {
+            // sometimes surface recreated was triggered, because of 2 VulkanSurfaceView instance exist.
+            // in this case , vulkan re-init will cause crash.
+            Log.w(TAG, "surfaceCreated , but renderthread is already exist ");
+            return;
+        }
+
+        _options.surface = holder.getSurface();
+        _options.assets  = getContext().getAssets();
+        _renderer        = new VulkanRenderer(this, _options);
+        _renderer.start();
+    }
+
+    @Override
+    public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+        Log.d(TAG, "surfaceDestroyed");
+
+        if (_renderer != null) disableVulkanRenderer();
+    }
+
+    @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-        _renderer.notifySizeChange(format, width, height);
+        if (_renderer != null) _renderer.notifySizeChange(format, width, height);
     }
 
     @Override
@@ -104,7 +124,7 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 touchEvent.touchPositions[index * 2 + 1] = e.getY(index);
             }
         }
-        _renderer.notifyTouchEvent(touchEvent);
+        if (_renderer != null) _renderer.notifyTouchEvent(touchEvent);
         return true;
     }
 };
@@ -127,7 +147,7 @@ class TouchEvent {
 
 class VulkanRenderer extends Thread {
 
-    public AtomicBoolean running = new AtomicBoolean(true);
+    public static AtomicBoolean running = new AtomicBoolean(false);
 
     public VulkanRenderer(VulkanSurfaceView view, RenderOptions options) {
         _view    = view;
@@ -144,6 +164,8 @@ class VulkanRenderer extends Thread {
 
     public void run() {
         try {
+
+            running.set(true);
 
             Native.create(_options.name, _options.surface, _options.assets, _options.rasterized, _options.hw, _options.animated, _options.useVmaAllocator);
 
@@ -164,6 +186,8 @@ class VulkanRenderer extends Thread {
             long[] frameDurations  = new long[N];
             long durationSum       = 0;
             int  durationCursor    = 0;
+
+            _nativeInited.set(true);
 
             while (running.get()) {
 
@@ -203,6 +227,8 @@ class VulkanRenderer extends Thread {
     Lock _lock = new ReentrantLock();
 
     AtomicBoolean _resized = new AtomicBoolean(false);
+
+    AtomicBoolean _nativeInited = new AtomicBoolean(false);
 
     TouchEvent _touchEvent;
 }

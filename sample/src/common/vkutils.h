@@ -186,6 +186,7 @@ public:
         bool                        gpuBvh    = false;
         bool                        offscreen = false;
         bool                        vsync     = true;
+        bool                        showUI    = true;
         SurfaceCreator              createSurface;
         SceneCreator                createScene;
     };
@@ -240,7 +241,9 @@ protected:
     sigslot::signal<> sceneLoaded;
 
 #if PH_ANDROID
-    void handleAndroidSimpleTouchEvent(bool down, float x, float y) { _ui->handleAndroidSimpleTouchEvent(down, x, y); }
+    void handleAndroidSimpleTouchEvent(bool down, float x, float y) {
+        if (_cp.showUI) _ui->handleAndroidSimpleTouchEvent(down, x, y);
+    }
 #endif
 
 private:

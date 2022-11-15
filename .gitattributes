@@ -2,3 +2,4 @@
 *.a filter=lfs diff=lfs merge=lfs -text
 *.apk filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
+sample/bin/linux64.Debug/* filter=lfs diff=lfs merge=lfs -text

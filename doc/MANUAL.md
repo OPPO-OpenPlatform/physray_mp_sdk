@@ -196,8 +196,6 @@ render mode. The render mode enumeration defines what kind of ray tracing effect
   This mode is the most complete and most time consuming mode that implemented a full path tracer. It is capable of rendering full range of GI effects as well
   as supporting arbitrary shape of light.
 
-<TODO: sample code of rendering>
-
 # Shader Pipeline
 
 The SDK comes with 2 shader pipeline. One is based on VK_KHR_ray_query extension and requires ray tracing capable GPU. The other is built on top of a custom
