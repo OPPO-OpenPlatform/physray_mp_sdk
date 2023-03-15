@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : va.h
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 // This is the main public interface of physray-va module
 #pragma once
 
@@ -15,16 +33,19 @@
 /// a 64-bit integer value.
 #if !defined(__LP64__) && !defined(_WIN64) && (!defined(__x86_64__) || defined(__ILP32__)) && !defined(_M_X64) && !defined(__ia64) && !defined(_M_IA64) && \
     !defined(__aarch64__) && !defined(__powerpc64__)
-    #define VK_DEFINE_NON_DISPATCHABLE_HANDLE(object) \
-        typedef struct object##_T {                   \
-            uint64_t u64;                             \
-            object##_T() = default;                   \
-            object##_T(uint64_t u): u64(u) {}         \
-            object##_T(int u): u64((uint64_t) u) {}   \
-            object##_T(nullptr_t): u64(0) {}          \
-            PH_DEFAULT_COPY(object##_T);              \
-            PH_DEFAULT_MOVE(object##_T);              \
-            operator uint64_t() const { return u64; } \
+    #define PH_SDK_CUSTOM_VK_HANDLE 1
+    #define VK_DEFINE_NON_DISPATCHABLE_HANDLE(object)                        \
+        typedef struct object##_T {                                          \
+            uint64_t u64;                                                    \
+            constexpr object##_T(): u64(0) {}                                \
+            constexpr object##_T(uint64_t u): u64(u) {}                      \
+            constexpr object##_T(int u): u64((uint64_t) u) {}                \
+            constexpr object##_T(nullptr_t): u64(0) {}                       \
+            constexpr object##_T(const object##_T &) = default;              \
+            constexpr object##_T & operator=(const object##_T &) = default;  \
+            constexpr object##_T(object##_T &&)                  = default;  \
+            constexpr object##_T & operator=(object##_T &&) = default;       \
+            constexpr              operator uint64_t() const { return u64; } \
         } object;
 #endif
 
@@ -45,16 +66,23 @@
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Include Eigen headers
-#if !PH_BUILD_DEBUG && defined(__GNUC__) && !PH_ANDROID
+#ifdef __GNUC__
     #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // Eigen 3.3.9 generate this warning on release build.
+    #if !PH_BUILD_DEBUG && !PH_ANDROID
+        #pragma GCC diagnostic ignored "-Wmaybe-uninitialized" // Eigen 3.3.9 generate this warning on release build.
+    #endif
+    #ifdef __clang__
+        #pragma GCC diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
+    #endif
 #endif
 #define EIGEN_MPL2_ONLY // Disable LGPL related features.
 #include <Eigen/Eigen>  // Eigne is our official 3D math library.
-#if !PH_BUILD_DEBUG && defined(__GNUC__) && !PH_ANDROID
+#ifdef __GNUC__
     #pragma GCC diagnostic pop
 #endif
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Include VMA allocator header
 #if PH_MSWIN
     #pragma warning(push, 0)
 #elif PH_UNIX_LIKE
@@ -68,12 +96,17 @@
     #pragma GCC diagnostic ignored "-Wformat"
     #pragma GCC diagnostic ignored "-Wundef"
 #endif
-//#if PH_BUILD_DEBUG
-//#ifndef VMA_DEBUG_DETECT_CORRUPTION
-//#define VMA_DEBUG_DETECT_CORRUPTION 1
-//#define VMA_DEBUG_MARGIN 32
-//#endif
-//#endif
+
+// Enable these defines to help debug VK memory corruption.
+// #ifndef VMA_DEBUG_DETECT_CORRUPTION
+//     #define VMA_DEBUG_DETECT_CORRUPTION 1
+//     #define VMA_DEBUG_MARGIN            32
+// #endif
+
+#ifndef VMA_DEBUG_ERROR_LOG
+    #define VMA_DEBUG_ERROR_LOG PH_LOGE
+#endif
+
 #include <vk_mem_alloc.h>
 #if PH_MSWIN
     #pragma warning(pop)
@@ -81,16 +114,14 @@
     #pragma GCC diagnostic pop
 #endif
 
-#include <atomic>
 #include <cassert>
 #include <functional>
-#include <set>
 #include <type_traits>
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Error check helpers
 #define PH_VKCHK(func, actionOnFailure)                                            \
-    if constexpr (true) {                                                          \
+    if (true) {                                                                    \
         auto result__ = (func);                                                    \
         /* there are a few positive success code other than VK_SUCCESS */          \
         if (result__ < 0) {                                                        \
@@ -108,14 +139,23 @@
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// main name space for Vulkan Accelerator module
-namespace ph::va {
+namespace ph {
+namespace va {
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// convert VKResult to string
 PH_API const char * VkResultToString(VkResult);
 
 // ---------------------------------------------------------------------------------------------------------------------
-/// Generate right handed perspective projection matrix for Vulkan
+/// @brief Generate Vulkan compatible perspective projection matrix for right handed system.
+///
+/// Note that according to Vulkan spec, clip space is always right handed:
+///     X (-1, 1) points left
+///     Y (-1, 1) points down
+///     Z ( 0, 1) points into screen (away from camera)
+///
+/// The "RH" in the function name indicates the handedness of the source coordinate system: x -> right, y -> up, z -> back
+///
 /// \param fovy     Vertical field of view in radian
 /// \param aspect   Aspect ratio (width : height)
 /// \param zNear    Distance of near plane
@@ -123,12 +163,50 @@ PH_API const char * VkResultToString(VkResult);
 PH_API Eigen::Matrix4f perspectiveRH(float fovy, float aspect, float zNear, float zFar);
 
 // ---------------------------------------------------------------------------------------------------------------------
-/// Generate right handed perspective projection matrix for Vulkan
+/// @brief Generate Vulkan compatible perspective projection matrix for left handed system.
+///
+/// Note that according to Vulkan spec, clip space is always right handed:
+///     X (-1, 1) points left
+///     Y (-1, 1) points down
+///     Z ( 0, 1) points into screen (away from camera)
+///
+/// The "LH" in the function name indicates the handedness of the source coordinate system: x -> right, y -> up, z -> front
+///
 /// \param fovy     Vertical field of view in radian
 /// \param aspect   Aspect ratio (width : height)
 /// \param zNear    Distance of near plane
 /// \param zFar     Distance of far plane
 PH_API Eigen::Matrix4f perspectiveLH(float fovy, float aspect, float zNear, float zFar);
+
+// ---------------------------------------------------------------------------------------------------------------------
+/// @brief Build Vulkan compatible orthographic matrix for right handed system.
+///
+/// In Vulkan spec, clip space is always right handed:
+///     X (-1, 1) -> right
+///     Y (-1, 1) -> down
+///     Z ( 0, 1) -> front (in to screen, away from viewer)
+///
+/// The "RH" in the function name indicates the handedness of the source coordinate system: x -> right, y -> up, z -> back
+PH_API Eigen::Matrix4f orthographicRH(float l, float r, float b, float t, float zn, float zf);
+PH_API Eigen::Matrix4f orthographicRH(float w, float h, float zn, float zf);
+
+// ---------------------------------------------------------------------------------------------------------------------
+/// @brief Build Vulkan compatible orthographic matrix for right handed system.
+///
+/// In Vulkan spec, clip space is always right handed:
+///     X (-1, 1) -> right
+///     Y (-1, 1) -> down
+///     Z ( 0, 1) -> front (in to screen, away from viewer)
+///
+/// The "LH" in the function name indicates the handedness of the source coordinate system: x -> right, y -> up, z -> front
+PH_API Eigen::Matrix4f orthographicLH(float l, float r, float b, float t, float zn, float zf);
+PH_API Eigen::Matrix4f orthographicLH(float w, float h, float zn, float zf);
+
+// ---------------------------------------------------------------------------------------------------------------------
+//
+inline Eigen::Matrix4f orthographic(float w, float h, float zn, float zf, bool leftHanded = false) {
+    return leftHanded ? orthographicLH(w, h, zn, zf) : orthographicRH(w, h, zn, zf);
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// Build a right handed look at view matrix.
@@ -151,12 +229,6 @@ PH_API Eigen::Matrix4f lookAtRH(Eigen::Vector3f const & eye, Eigen::Vector3f con
 /// \param up       Normalized up vector, how the camera is oriented. Typically (0, 0, 1)
 PH_API Eigen::Matrix4f lookAtLH(Eigen::Vector3f const & eye, Eigen::Vector3f const & center, Eigen::Vector3f const & up);
 
-PH_API Eigen::Matrix4f orthographic(float w, float h, float zn, float zf, bool leftHanded = false);
-PH_API Eigen::Matrix4f orthographicLH(float w, float h, float zn, float zf);
-PH_API Eigen::Matrix4f orthographicRH(float w, float h, float zn, float zf);
-PH_API Eigen::Matrix4f orthographicLH(float l, float r, float b, float t, float zn, float zf);
-PH_API Eigen::Matrix4f orthographicRH(float l, float r, float b, float t, float zn, float zf);
-
 // ---------------------------------------------------------------------------------------------------------------------
 //
 inline VkRect2D viewportToScissor(const VkViewport vp, uint32_t maxWidth, uint32_t maxHeight) {
@@ -171,19 +243,63 @@ inline VkRect2D viewportToScissor(const VkViewport vp, uint32_t maxWidth, uint32
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-/// A helper function to insert a Vulkan memory barrier to command buffer
-inline void memoryBarrier(VkCommandBuffer cb, VkPipelineStageFlags srcStage, VkAccessFlags srcAccess, VkPipelineStageFlags dstStage, VkAccessFlags dstAccess) {
-    VkMemoryBarrier barrier {
-        VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-        nullptr,
-        srcAccess,
-        dstAccess,
-    };
-    vkCmdPipelineBarrier(cb, srcStage, dstStage, {}, // dependency flags
-                         1, &barrier,                // memory barrier
-                         0, nullptr,                 // buffer barrier
-                         0, nullptr);                // image barrier
-}
+/// A helper function to insert resource/memory barriers to command buffer
+struct SimpleBarriers {
+    VkPipelineStageFlags               srcStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    VkPipelineStageFlags               dstStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    std::vector<VkMemoryBarrier>       memory;
+    std::vector<VkBufferMemoryBarrier> buffers;
+    std::vector<VkImageMemoryBarrier>  images;
+
+    void clear() {
+        memory.clear();
+        buffers.clear();
+        images.clear();
+    }
+
+    SimpleBarriers & reserveBuffers(size_t count) {
+        buffers.reserve(count);
+        return *this;
+    }
+
+    SimpleBarriers & addMemory(VkAccessFlags srcAccess, VkAccessFlags dstAccess) {
+        memory.emplace_back(VkMemoryBarrier {
+            VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+            nullptr,
+            srcAccess,
+            dstAccess,
+        });
+        return *this;
+    }
+
+    SimpleBarriers & addBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE,
+                               VkAccessFlags srcAccess = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT,
+                               VkAccessFlags dstAccess = VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT) {
+        if (!buffer) return *this;
+        buffers.emplace_back(VkBufferMemoryBarrier {VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER, nullptr, srcAccess, dstAccess, VK_QUEUE_FAMILY_IGNORED,
+                                                    VK_QUEUE_FAMILY_IGNORED, buffer, offset, size});
+        return *this;
+    }
+
+    SimpleBarriers & addImage(VkImage image, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkImageLayout oldLayout, VkImageLayout newLayout,
+                              VkImageSubresourceRange subresourceRange) {
+        if (!image) return *this;
+        images.emplace_back(VkImageMemoryBarrier {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER, nullptr, srcAccess, dstAccess, oldLayout, newLayout,
+                                                  VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, image, subresourceRange});
+        return *this;
+    }
+
+    SimpleBarriers & setStages(VkPipelineStageFlags src, VkPipelineStageFlags dst) {
+        srcStage = src;
+        dstStage = dst;
+        return *this;
+    }
+
+    void write(VkCommandBuffer cb) const {
+        if (memory.empty() && buffers.empty() && images.empty()) return;
+        vkCmdPipelineBarrier(cb, srcStage, dstStage, {}, (uint32_t) memory.size(), memory.data(), (uint32_t) buffers.size(), buffers.data(), 0, nullptr);
+    }
+};
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// You should ONLY USE THIS FOR DEBUGGING - this is not something that should ever ship in real code,
@@ -207,61 +323,14 @@ inline void fullPipelineBarrier(VkCommandBuffer cb) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Get object type of a VK handle.
+/// @brief Get object type of a VK handle.
+/// The base function is intentionally left undefined. See va.inl for all specialized versions.
+/// \todo simplify this with "if constexpr" expression in c++17.
 template<typename HANDLE>
-inline VkObjectType getHandleObjectType() {
-    if constexpr (std::is_same_v<HANDLE, uint64_t>) {
-        static_assert(AlwaysFalse<HANDLE>, "Can't use built-in integer as handle type. If you are on 32-bit platform, "
-                                           "please override VK_DEFINE_NON_DISPATCHABLE_HANDLE to give each Vulkan handle an unique type.");
-        return VK_OBJECT_TYPE_UNKNOWN;
-    } else if constexpr (std::is_same_v<HANDLE, VkBuffer>) {
-        return VK_OBJECT_TYPE_BUFFER;
-    } else if constexpr (std::is_same_v<HANDLE, VkCommandPool>) {
-        return VK_OBJECT_TYPE_COMMAND_POOL;
-    } else if constexpr (std::is_same_v<HANDLE, VkCommandBuffer>) {
-        return VK_OBJECT_TYPE_COMMAND_BUFFER;
-    } else if constexpr (std::is_same_v<HANDLE, VkDescriptorPool>) {
-        return VK_OBJECT_TYPE_DESCRIPTOR_POOL;
-    } else if constexpr (std::is_same_v<HANDLE, VkDescriptorSetLayout>) {
-        return VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT;
-    } else if constexpr (std::is_same_v<HANDLE, VkDeviceMemory>) {
-        return VK_OBJECT_TYPE_DEVICE_MEMORY;
-    } else if constexpr (std::is_same_v<HANDLE, VkFence>) {
-        return VK_OBJECT_TYPE_FENCE;
-    } else if constexpr (std::is_same_v<HANDLE, VkFramebuffer>) {
-        return VK_OBJECT_TYPE_FRAMEBUFFER;
-    } else if constexpr (std::is_same_v<HANDLE, VkImage>) {
-        return VK_OBJECT_TYPE_IMAGE;
-    } else if constexpr (std::is_same_v<HANDLE, VkImageView>) {
-        return VK_OBJECT_TYPE_IMAGE_VIEW;
-    } else if constexpr (std::is_same_v<HANDLE, VkPipeline>) {
-        return VK_OBJECT_TYPE_PIPELINE;
-    } else if constexpr (std::is_same_v<HANDLE, VkPipelineLayout>) {
-        return VK_OBJECT_TYPE_PIPELINE_LAYOUT;
-    } else if constexpr (std::is_same_v<HANDLE, VkRenderPass>) {
-        return VK_OBJECT_TYPE_RENDER_PASS;
-    } else if constexpr (std::is_same_v<HANDLE, VkSemaphore>) {
-        return VK_OBJECT_TYPE_SEMAPHORE;
-    } else if constexpr (std::is_same_v<HANDLE, VkShaderModule>) {
-        return VK_OBJECT_TYPE_SHADER_MODULE;
-    } else if constexpr (std::is_same_v<HANDLE, VkSurfaceKHR>) {
-        return VK_OBJECT_TYPE_SURFACE_KHR;
-    } else if constexpr (std::is_same_v<HANDLE, VkSwapchainKHR>) {
-        return VK_OBJECT_TYPE_SWAPCHAIN_KHR;
-    } else if constexpr (std::is_same_v<HANDLE, VkSampler>) {
-        return VK_OBJECT_TYPE_SAMPLER;
-    } else if constexpr (std::is_same_v<HANDLE, VkQueryPool>) {
-        return VK_OBJECT_TYPE_QUERY_POOL;
-    } else if constexpr (std::is_same_v<HANDLE, VkAccelerationStructureKHR>) {
-        return VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR;
-    } else {
-        static_assert(AlwaysFalse<HANDLE>, "unsupported handle type.");
-        return VK_OBJECT_TYPE_UNKNOWN;
-    }
-}
+inline VkObjectType getHandleObjectType();
 
 // ---------------------------------------------------------------------------------------------------------------------
-/// A little struct to hold all essential Vuklan global objects. This is to make it easier to reference key Vulkan
+/// A little struct to hold all essential Vulkan global objects. This is to make it easier to reference key Vulkan
 /// information across the library.
 struct VulkanGlobalInfo {
     const VkAllocationCallbacks * allocator    = nullptr;
@@ -270,10 +339,6 @@ struct VulkanGlobalInfo {
     VkDevice                      device       = nullptr;
     VmaAllocator                  vmaAllocator = nullptr;
 
-    VulkanGlobalInfo(const VkAllocationCallbacks * a = nullptr): allocator(a) {}
-
-    ~VulkanGlobalInfo() = default;
-
     bool operator==(const VulkanGlobalInfo & rhs) const {
         return allocator == rhs.allocator && instance == rhs.instance && phydev == rhs.phydev && device == rhs.device;
     }
@@ -281,68 +346,13 @@ struct VulkanGlobalInfo {
     bool operator!=(const VulkanGlobalInfo & rhs) const { return !operator==(rhs); }
 
     template<typename HANDLE>
-    void safeDestroy(HANDLE & h, VmaAllocation & a = DUMMPY_ALLOCATION) const {
-        if (!h) {
-            return;
-            // Note: there will be lots of if branches here. Try keep it sorted by then handle type.
-        } else if constexpr (std::is_same_v<HANDLE, uint64_t>) {
-            static_assert(AlwaysFalse<HANDLE>, "Can't use built-in integer as handle type. If you are on 32-bit platform, "
-                                               "please override VK_DEFINE_NON_DISPATCHABLE_HANDLE to give each Vulkan handle an unique type.");
-        } else if constexpr (std::is_same_v<HANDLE, VkBuffer>) {
-            if (a) {
-                PH_REQUIRE(vmaAllocator);
-                vmaDestroyBuffer(vmaAllocator, h, a);
-            } else {
-                vkDestroyBuffer(device, h, allocator);
-            }
-        } else if constexpr (std::is_same_v<HANDLE, VkCommandPool>) {
-            vkDestroyCommandPool(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkDescriptorPool>) {
-            vkDestroyDescriptorPool(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkDescriptorSetLayout>) {
-            vkDestroyDescriptorSetLayout(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkDeviceMemory>) {
-            vkFreeMemory(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkFence>) {
-            vkDestroyFence(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkFramebuffer>) {
-            vkDestroyFramebuffer(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkImage>) {
-            if (a) {
-                PH_REQUIRE(vmaAllocator);
-                vmaDestroyImage(vmaAllocator, h, a);
-            } else {
-                vkDestroyImage(device, h, allocator);
-            }
-        } else if constexpr (std::is_same_v<HANDLE, VkImageView>) {
-            vkDestroyImageView(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkPipeline>) {
-            vkDestroyPipeline(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkPipelineLayout>) {
-            vkDestroyPipelineLayout(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkRenderPass>) {
-            vkDestroyRenderPass(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkSemaphore>) {
-            vkDestroySemaphore(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkShaderModule>) {
-            vkDestroyShaderModule(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkSurfaceKHR>) {
-            vkDestroySurfaceKHR(instance, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkSwapchainKHR>) {
-            vkDestroySwapchainKHR(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkSampler>) {
-            vkDestroySampler(device, h, allocator);
-        } else if constexpr (std::is_same_v<HANDLE, VkQueryPool>) {
-            vkDestroyQueryPool(device, h, allocator);
-        } else {
-            static_assert(AlwaysFalse<HANDLE>, "unsupported handle type.");
-        }
-        h = 0;
-        a = 0;
-    }
+    void safeDestroy(HANDLE &, VmaAllocation & = DUMMY_ALLOCATION()) const;
 
 private:
-    static inline VmaAllocation DUMMPY_ALLOCATION = 0;
+    static VmaAllocation & DUMMY_ALLOCATION() {
+        static VmaAllocation a {0};
+        return a;
+    };
 };
 
 /// calling vkDeviceWaitIdle() in thread safe manner (protected by a mutex).
@@ -356,7 +366,7 @@ PH_API VkResult threadSafeDeviceWaitIdle(VkDevice device);
 /// Pooled allocator to deal with dynamic memory allocation in AutoHandle class.
 //@{
 PH_API void * allocateAutoHandle(size_t);
-PH_API void   deaallocateAutoHandle(void *, size_t);
+PH_API void   deallocateAutoHandle(void *, size_t);
 //@}
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -433,11 +443,11 @@ public:
         return &_handle;
     }
 
-    operator T() const { return _handle; }
+    operator const T &() const { return _handle; }
 
     operator bool() const { return !!_handle; }
 
-    T get() const { return _handle; }
+    const T & get() const { return _handle; }
 
     bool empty() const { return !_handle; }
 
@@ -478,7 +488,7 @@ public:
     /// Clear any preexisting handles. Return a pointer that is ready to pass to
     /// Vulkan's create function for creating a new handle.
     ///
-    /// \param deletor This can be either a reference to VulkanGlobalInfo object, or a function that accepts
+    /// \param deleter This can be either a reference to VulkanGlobalInfo object, or a function that accepts
     ///               calling signature of: "void (T)". It'll be used delete the underlying handle.
     ///
     /// Here's an example of how it should be used:
@@ -486,17 +496,12 @@ public:
     ///     AutoHandle<VkCommandPool> pool;
     ///     VkCreateCommandPool(device, &ci, allocator, pool.prepare([](auto h){ vkDestroyCommandPool(h); }));
     ///
-    template<typename Deletor>
-    T * prepare(Deletor deletor) {
+    template<typename Deleter>
+    T * prepare(Deleter deleter) {
         clear(); // release old handle.
         PH_ASSERT(0 == _handle && 0 == _ref);
-        _ref = new RefCounter();
-        if constexpr (std::is_same_v<Deletor, VulkanGlobalInfo> || std::is_same_v<Deletor, const VulkanGlobalInfo &> ||
-                      std::is_same_v<Deletor, VulkanGlobalInfo &>) {
-            _ref->d = [&](auto & h) { deletor.safeDestroy(h); };
-        } else {
-            _ref->d = deletor;
-        }
+        _ref    = new RefCounter();
+        _ref->d = initDeleter<Deleter>(deleter);
         return &_handle;
     }
 
@@ -507,7 +512,17 @@ public:
     }
 
 private:
-    // becuase & operator is overloaded. So we need alternative way to get the address of the class.
+    template<typename Deleter>
+    Deleter & initDeleter(Deleter & d) {
+        return d;
+    }
+
+    template<typename VulkanGlobalInfo>
+    auto initDeleter(const VulkanGlobalInfo & vgi) {
+        return [&](auto & h) { vgi.safeDestroy(h); };
+    }
+
+    // because & operator is overloaded. So we need alternative way to get the address of the class.
     const AutoHandle * addr() const { return this; }
     AutoHandle *       addr() { return this; }
 
@@ -525,28 +540,33 @@ private:
         }
 
         static void * operator new(size_t size) { return allocateAutoHandle(size); }
-        static void   operator delete(void * ptr, size_t size) { return deaallocateAutoHandle(ptr, size); }
+        static void   operator delete(void * ptr, size_t size) { return deallocateAutoHandle(ptr, size); }
     };
 
     T            _handle = 0;
     RefCounter * _ref    = 0;
 };
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph
 
 // Do _not_ let clang-format reorder these headers
 // clang-format off
+#include "va/va.inl"
 #include "va/debug.inl"
-#include "va/command.inl"
 #include "va/memory.inl"
 #include "va/shader.inl"
 #include "va/buffer.inl"
 #include "va/image.inl"
-#include "va/fatmesh.inl"
+#include "va/deferred-host-operation.inl"
+#include "va/command.inl"
 #include "va/initializers.inl"
 #include "va/info.inl"
-#include "va/misc.inl"
+#include "va/async-timestamp.inl"
 #include "va/device.inl"
 #include "va/swapchain.inl"
 #include "va/render-loop.inl"
+#include "va/descriptor.inl"
+#include "va/compute.inl"
+#include "va/pipeline.inl"
 // clang-format on

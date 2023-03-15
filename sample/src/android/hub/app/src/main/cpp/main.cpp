@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : main.cpp
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 #include "app.h"
 #include <android_native_app_glue.h>
 #include <algorithm>
@@ -118,7 +136,7 @@ AndroidDemoApp::ConstructParameters generateDP(struct android_app * app) {
         .name       = getStringField(env.env, me, "sceneName"),
         .win        = app->window,
         .rasterized = getBooleanField(env.env, me, "rasterized"),
-        .rayQuery   = getBooleanField(env.env, me, "hw"),
+        .rayQuery   = false, // getBooleanField(env.env, me, "hw"),
         .animated   = getBooleanField(env.env, me, "animated"),
     };
     if (cp.name.empty()) cp.name = "Cornell Box";

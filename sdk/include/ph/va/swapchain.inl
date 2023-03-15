@@ -1,6 +1,7 @@
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
-namespace ph::va {
+namespace ph {
+namespace va {
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
@@ -9,20 +10,22 @@ struct SimpleSwapchain {
         /// the proxy to submit present to.
         VulkanSubmissionProxy & vsp;
 
-        /// pointer to the window system. It is (GLFWwidow*) on destop, (ANativeWindow*) on Android.
-        /// ignored when creating offscreen swapchian.
+        /// pointer to the window system. It is (GLFWwidow*) on desktop, (ANativeWindow*) on Android.
+        /// ignored when creating offscreen swapchain.
         void * window = 0;
 
-        /// handle of the main swapchain surface. Set to null to create an offscreen swapchian.
+        /// handle of the main swapchain surface. Set to null to create an offscreen swapchain.
         VkSurfaceKHR surface = 0;
 
-        /// back buffer parameters
-        //@{
+        /// back buffer format
         VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+
+        /// back buffer dimension
         uint32_t width = 0, height = 0;
-        uint32_t count = 3u; ///< Desired number of back buffers. Note that this is just hint. GPU driver/hardware may
-                             ///< choose to do things differently.
-        //@}
+
+        /// This value, along with VkSurfaceCapabilitiesKHR::minImageCount, determine the minimal
+        /// number of images the swapchain must provide.
+        uint32_t maxInFlightFrames = 2;
 
         /// is vsync enabled or not. Ignored for offscreen swapchain.
         bool vsync = true;
@@ -34,10 +37,11 @@ struct SimpleSwapchain {
     };
 
     struct BackBuffer {
-        VkExtent2D  extent {};
-        VkFormat    format = VK_FORMAT_UNDEFINED;
-        VkImage     image  = 0;
-        VkImageView view   = 0;
+        VkExtent2D    extent {};
+        VkFormat      format = VK_FORMAT_UNDEFINED;
+        VkImage       image  = 0;
+        VkImageView   view   = 0;
+        VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
     };
 
     static SimpleSwapchain * create(const InitParameters &);
@@ -64,4 +68,5 @@ protected:
     SimpleSwapchain() = default;
 };
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph

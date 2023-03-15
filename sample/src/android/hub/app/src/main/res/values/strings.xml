@@ -1,2 +1,7 @@
 <resources>
+    <string-array name="test_apps">
+        <item>Empty</item>
+        <item>Triangle</item>
+        <item>Blue-tri</item>
+    </string-array>
 </resources>

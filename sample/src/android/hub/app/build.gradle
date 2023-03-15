@@ -41,6 +41,7 @@ android {
             resValue "string", "garage_app_name", "Garage"
             resValue "string", "ring_app_name", "OPPO-Ring"
             resValue "string", "ptdemo_app_name", "PTDemo"
+            resValue "string", "war_app_name", "War"
         }
         debug {
             applicationIdSuffix ".DBG"
@@ -48,6 +49,8 @@ android {
             resValue "string", "garage_app_name", "Garage.DBG"
             resValue "string", "ring_app_name", "OPPO-Ring.DBG"
             resValue "string", "ptdemo_app_name", "PTDemo.DBG"
+            resValue "string", "war_app_name", "War.DBG"
+
         }
     }
     compileOptions {
@@ -69,10 +72,8 @@ android {
                 // include sample assets
                 srcDirs "../../../asset"
             }
-        }
-        debug {
             jniLibs {
-                // include Vulkan validation layer for debug build only.
+                // include Vulkan validation library.
                 srcDirs "../../vulkan-validation-layer/android-binaries-1.2.198.0"
             }
         }

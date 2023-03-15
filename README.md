@@ -14,10 +14,7 @@ Please follow this document for detailed build instructions: [BUILD.md](doc/BUIL
 A: No. This SDK is based on Vulkan 1.1+ API.
 
 ## Q: Does the SDK support ray tracing effect on mobile platform?
-A: Yes. The SDK is tested on OPPO Find X5 Pro phone with with MTK D9000 chip. 
-
-## Q: What phone model are currently supported?
-A: OPPO Find X5 Pro with MTK D9000 chip is the only phone model we officially support so far.
+A: Yes. The new SDK will support both Qualcomm Snapdragon 8Gen2 and MTK D9200 platform. 
 
 ## Q: Is the ray tracing effect accelerated by hardware? What about on mobile platform?
 A: The rendering is fully hardware accelerated on ray tracing capable hardware, such as NVIDIA GeForce 20XX graphics card. On mobile platform though, the
@@ -36,7 +33,7 @@ PhysRay SDK references the following 3rd party libraries:
 | [stb image loader](https://github.com/nothings/stb/blob/master/stb_image.h) | Public Domain |
 | [Stack Walker](https://github.com/JochenKalmbach/StackWalker) | BSD |
 | [hash-library](https://github.com/stbrumme/hash-library)| zlib |
-| [CLIII](https://github.com/CLIUtils/CLI11) | 3-Clause BSD |
+| [CLI11](https://github.com/CLIUtils/CLI11) | 3-Clause BSD |
 | [JSON for Modern C++](https://github.com/nlohmann/json) | MIT |
 | [tiny glTF](https://github.com/syoyo/tinygltf) | MIT |
 | [Vulkan Minimal Compute](https://github.com/Erkaman/vulkan_minimal_compute) | MIT |
@@ -44,8 +41,10 @@ PhysRay SDK references the following 3rd party libraries:
 | [Dear ImGui](https://github.com/ocornut/imgui) | MIT |
 | [Qualcomm Hexagon SDK: v4.x (4.5.03)](https://developer.qualcomm.com/software/hexagon-dsp-sdk/tools) | Restricted Use Software |
 | [KTX Software](https://github.com/KhronosGroup/KTX-Software) | Apache-2.0 |
+| [SPIRV Reflect](https://github.com/KhronosGroup/SPIRV-Reflect) | Apache 2.0 |
 | [Pierre-Antoine Lacaze's Sigslot Library](https://github.com/palacaze/sigslot) | MIT |
 | [ARM ASTC Encoder](https://github.com/ARM-software/astc-encoder) | Apache 2.0 |
+| [Backward-cpp](https://github.com/bombela/backward-cpp) | MIT |
 
 PhysRay SDK has the following third-party assets in the sample/dev assets directory:
 | Name | License |

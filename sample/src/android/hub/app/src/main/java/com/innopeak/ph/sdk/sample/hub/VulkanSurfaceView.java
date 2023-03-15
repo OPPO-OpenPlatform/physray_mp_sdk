@@ -45,37 +45,9 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
         if (null != l) l.onFpsUpdated(fps);
     }
 
-    public boolean getRenderInitState() {
-        if (_renderer != null)
-            return _renderer._nativeInited.get();
-        else
-            return false;
-    }
-
-    private void disableVulkanRenderer() {
-        Log.d(TAG, "disableVulkanRenderer");
-        // notify render thread to quit
-        VulkanRenderer.running.set(false);
-
-        // wait for render thread to finish before returning. If we don't do this, then the surface
-        // could get destroyed before vulkan resources are released. It could cause vulkan APi to
-        // fail, or even crash when vulkan validation layer is enabled.
-        try {
-            _renderer.join();
-        } catch (InterruptedException ex) { ex.printStackTrace(); }
-    }
-
     @Override
     public void surfaceCreated(@NonNull SurfaceHolder holder) {
         Log.d(TAG, "surfaceCreated");
-
-        if (VulkanRenderer.running.get()) {
-            // sometimes surface recreated was triggered, because of 2 VulkanSurfaceView instance exist.
-            // in this case , vulkan re-init will cause crash.
-            Log.w(TAG, "surfaceCreated , but renderthread is already exist ");
-            return;
-        }
-
         _options.surface = holder.getSurface();
         _options.assets  = getContext().getAssets();
         _renderer        = new VulkanRenderer(this, _options);
@@ -84,14 +56,24 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
 
     @Override
     public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-        Log.d(TAG, "surfaceDestroyed");
+        Log.d(TAG, "Destroy Android surface...");
 
-        if (_renderer != null) disableVulkanRenderer();
+        // notify render thread to quit
+        _renderer.running.set(false);
+
+        // wait for render thread to finish before returning. If we don't do this, then the surface
+        // could get destroyed before vulkan resources are released. It could cause vulkan APi to
+        // fail, or even crash when vulkan validation layer is enabled.
+        try {
+            _renderer.join();
+        } catch (InterruptedException ex) { ex.printStackTrace(); }
+
+        Log.d(TAG, "Android surface destroyed.");
     }
 
     @Override
     public void surfaceChanged(@NonNull SurfaceHolder holder, int format, int width, int height) {
-        if (_renderer != null) _renderer.notifySizeChange(format, width, height);
+        _renderer.notifySizeChange(format, width, height);
     }
 
     @Override
@@ -124,7 +106,7 @@ public class VulkanSurfaceView extends SurfaceView implements SurfaceHolder.Call
                 touchEvent.touchPositions[index * 2 + 1] = e.getY(index);
             }
         }
-        if (_renderer != null) _renderer.notifyTouchEvent(touchEvent);
+        _renderer.notifyTouchEvent(touchEvent);
         return true;
     }
 };
@@ -147,7 +129,7 @@ class TouchEvent {
 
 class VulkanRenderer extends Thread {
 
-    public static AtomicBoolean running = new AtomicBoolean(false);
+    public AtomicBoolean running = new AtomicBoolean(true);
 
     public VulkanRenderer(VulkanSurfaceView view, RenderOptions options) {
         _view    = view;
@@ -165,8 +147,6 @@ class VulkanRenderer extends Thread {
     public void run() {
         try {
 
-            running.set(true);
-
             Native.create(_options.name, _options.surface, _options.assets, _options.rasterized, _options.hw, _options.animated, _options.useVmaAllocator);
 
             // wait for the initial resize call.
@@ -180,14 +160,8 @@ class VulkanRenderer extends Thread {
 
             Native.resize();
 
-            long lastFrameTime     = nanoTime();
-            long lastFpsReportTime = lastFrameTime;
-            int  N                 = 50;
-            long[] frameDurations  = new long[N];
-            long durationSum       = 0;
-            int  durationCursor    = 0;
-
-            _nativeInited.set(true);
+            long lastFrameTime = nanoTime();
+            int  frameCounter  = 0;
 
             while (running.get()) {
 
@@ -205,16 +179,12 @@ class VulkanRenderer extends Thread {
                 // calculate FPS
                 long now      = nanoTime();
                 long duration = now - lastFrameTime;
-                lastFrameTime = now;
-                durationSum -= frameDurations[durationCursor % N];
-                durationSum += duration;
-                frameDurations[durationCursor % N] = duration;
-                durationCursor++;
-                if (now - lastFpsReportTime > 1000000000) { // report FPS once / sec.
-                    lastFpsReportTime = now;
-                    long  ave         = durationSum / Math.min(N, durationCursor);
-                    float fps         = (float) (1000000000.0 / ave);
+                ++frameCounter;
+                if (duration > 1000000000) { // report FPS once / sec.
+                    float fps = (float) frameCounter * 1000000000.0f / duration;
                     _view.setFps(fps);
+                    lastFrameTime = now;
+                    frameCounter  = 0;
                 }
             }
 
@@ -227,8 +197,6 @@ class VulkanRenderer extends Thread {
     Lock _lock = new ReentrantLock();
 
     AtomicBoolean _resized = new AtomicBoolean(false);
-
-    AtomicBoolean _nativeInited = new AtomicBoolean(false);
 
     TouchEvent _touchEvent;
 }

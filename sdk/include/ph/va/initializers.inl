@@ -3,7 +3,9 @@
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 // TODO: move back to ph::va namespace.
-namespace ph::va::util {
+namespace ph {
+namespace va {
+namespace util {
 
 inline VkMemoryAllocateInfo memoryAllocateInfo() {
     VkMemoryAllocateInfo memAllocInfo {};
@@ -171,14 +173,6 @@ inline VkSamplerCreateInfo samplerCreateInfo() {
     return samplerCreateInfo;
 }
 
-inline VkMemoryBarrier memoryBarrier(VkAccessFlags srcAccess, VkAccessFlags dstAccess) {
-    VkMemoryBarrier barrier = {};
-    barrier.sType           = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-    barrier.srcAccessMask   = srcAccess;
-    barrier.dstAccessMask   = dstAccess;
-    return barrier;
-}
-
 inline VkImageSubresourceRange imageSubresourceRange(VkImageAspectFlags aspectMask, uint32_t baseMipLevel = 0, uint32_t levelCount = 1,
                                                      uint32_t baseArrayLayer = 0, uint32_t layerCount = 1) {
     VkImageSubresourceRange range = {};
@@ -188,22 +182,6 @@ inline VkImageSubresourceRange imageSubresourceRange(VkImageAspectFlags aspectMa
     range.baseArrayLayer          = baseArrayLayer;
     range.layerCount              = layerCount;
     return range;
-}
-
-inline VkImageMemoryBarrier imageMemoryBarrier(VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout,
-                                               VkImage image, VkImageSubresourceRange subresourceRange, uint32_t srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                               uint32_t dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED) {
-    VkImageMemoryBarrier imgMemBarrier = {};
-    imgMemBarrier.sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    imgMemBarrier.srcAccessMask        = srcAccessMask;
-    imgMemBarrier.dstAccessMask        = dstAccessMask;
-    imgMemBarrier.oldLayout            = oldLayout;
-    imgMemBarrier.newLayout            = newLayout;
-    imgMemBarrier.srcQueueFamilyIndex  = srcQueueFamilyIndex;
-    imgMemBarrier.dstQueueFamilyIndex  = dstQueueFamilyIndex;
-    imgMemBarrier.image                = image;
-    imgMemBarrier.subresourceRange     = subresourceRange;
-    return imgMemBarrier;
 }
 
 inline VkPipelineShaderStageCreateInfo shaderStageCreateInfo(VkShaderModule module, VkShaderStageFlagBits stage, const char * pName = "main") {
@@ -243,4 +221,6 @@ graphicsPipelineCreateInfo(uint32_t stageCount, const VkPipelineShaderStageCreat
     return createInfo;
 };
 
-} // namespace ph::va::util
+} // namespace util
+} // namespace va
+} // namespace ph

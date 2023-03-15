@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : native-lib.cpp
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 #include "app.h"
 #include <android/native_window_jni.h>
 #include <android/asset_manager_jni.h>
@@ -85,4 +103,9 @@ extern "C" JNIEXPORT void JNICALL Java_com_innopeak_ph_sdk_sample_hub_Native_tou
     } catch (...) {}
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+//
+namespace ph::rt {
+void unitTest();
+}
 extern "C" JNIEXPORT void JNICALL Java_com_innopeak_ph_sdk_sample_hub_Native_unitTest(JNIEnv *, jclass clazz) { ph::rt::unitTest(); }

@@ -1,3 +1,21 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : base.h
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 // This is the main header of PhysRay SDK Base module.
 #pragma once
 
@@ -10,14 +28,13 @@
     #endif
 #endif
 
-/// The main compile time flag to determine if PhysRay SDK is built as static build or not.
-#ifndef PH_BUILD_STATIC
-    #define PH_BUILD_STATIC 1
-#endif
-
 /// Main namespace of PhysRay SDK
 namespace ph {}
 
 #include "base/base.inl"
 #include "base/color.inl"
 #include "base/asset.inl"
+
+// Include a modified copy of palacaze/sigslot library. all classes is moved into ph namespace
+// to avoid naming conflicting.
+#include "base/sigslot/signal.hpp"

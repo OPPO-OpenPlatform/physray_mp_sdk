@@ -1,7 +1,25 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : drag-motion-controller.h
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 #pragma once
 
 #include "touch-event.h"
-#include "common/first-person-controller.h"
+#include "rt/common/first-person-controller.h"
 
 #include <android/native_window.h>
 
@@ -47,7 +65,7 @@ private:
     int _rotateTouchId = -1;
 
     /// The controller this is manipulating.
-    FirstPersonController * _firstPersonController = nullptr;
+    FirstPersonController * _firstPersonController;
 
     /// How far from starting position before we start moving.
     float _threshold = 8.0f;

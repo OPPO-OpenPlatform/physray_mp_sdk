@@ -1,13 +1,35 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : app.h
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 #pragma once
 
-#include "common/vkutils.h"
+#include "rt/common/simpleApp.h"
 
-#include "cornell/cornell.h"
-#include "garage/garage.h"
-#include "ring/ring.h"
-#include "shadow/shadow.h"
-#include "suzanne/suzanne.h"
-#include "ptdemo/ptdemo.h"
+#include "rt/cornell/cornell.h"
+#include "rt/garage/garage.h"
+#include "rt/ring/ring.h"
+#include "rt/shadow/shadow.h"
+#include "rt/suzanne/suzanne.h"
+#include "rt/ptdemo/ptdemo.h"
+#include "rt/war/war.h"
+#include "rt/empty_app/empty_app.h"
+#include "rt/triangle/triangle.h"
+#include "rt/blue_triangle/blue_triangle.h"
 
 #include "drag-motion-controller.h"
 #include "touch-event.h"
@@ -31,17 +53,11 @@ public:
         // If using HW ray query or not. Set to false to use custom software solution.
         bool rayQuery = true;
 
-        // Build BVH using compute shaders. Ignored if rayQuery is true.
-        bool gpuBvh = false;
-
         // If started the demo with animation.
-        bool animated = true;
+        int animated = 1;
 
         // Set to true to defer to VMA for device memory allocations.
         bool useVmaAllocator = true;
-
-        // set to ture to enable UI
-        bool showUI = false;
     };
 
     AndroidDemoApp(const ConstructParameters & cp): _cp(cp), _last({}) {
@@ -49,59 +65,65 @@ public:
         auto rayQueryProp = getJediProperty("ray-query");
         if (!rayQueryProp.empty()) { _cp.rayQuery = rayQueryProp == "yes" || rayQueryProp == "1"; }
 
-        construct({{
-                       .instanceExtensions =
-                           {
-                               {VK_KHR_SURFACE_EXTENSION_NAME, true},
-                               {VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true},
-                           },
-                   },
-                   {
-                       .useVmaAllocator = cp.useVmaAllocator,
-                   },
-                   VK_FORMAT_R8G8B8A8_UNORM,
-                   _cp.rayQuery,
-                   _cp.gpuBvh,
-                   false, // offscreen
-                   true,  // turn on vsync
-                   _cp.showUI,
-                   [this](const ph::va::VulkanGlobalInfo & vgi) {
-                       // create a surface out of the native window
-                       ph::va::AutoHandle<VkSurfaceKHR> s;
-                       VkAndroidSurfaceCreateInfoKHR    sci {VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
-                       sci.window = _cp.win;
-                       PH_VA_REQUIRE(vkCreateAndroidSurfaceKHR(vgi.instance, &sci, vgi.allocator, s.prepare(vgi)));
-                       return s;
-                   },
-                   [this](auto & app) {
-                       if (_cp.name == "Cornell Box") {
-                           return createScene<CornellBoxScene>(app);
-                       } else if (_cp.name == "Shadow") {
-                           return createScene<ShadowScene>(app);
-                       } else if (_cp.name == "Suzanne") {
-                           return createScene<SuzanneScene>(app);
-                       } else if (_cp.name == "Rocket") {
-                           return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/the-rocket/the-rocket.glb"; });
-                       } else if (_cp.name == "Helmet") {
-                           return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/damaged-helmet/damaged-helmet.gltf"; });
-                       } else if (_cp.name == "Glasses") {
-                           return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/cat-eye-glasses.gltf"; });
-                       } else if (_cp.name == "Ring") {
-                           return createScene<OppoRingScene>(app);
-                       } else if (_cp.name == "Garage") {
-                           return createScene<GarageScene>(app);
-                       } else if (_cp.name == "PTDemo") {
-                           return createScene<PathTracerDemo>(app);
-                       } else {
-                           PH_LOGE("Unrecognized demo name: %s.", _cp.name.c_str());
-                           return (SimpleScene *) nullptr;
-                       }
-                   }});
+        construct({.icp =
+                       {
+                           .instanceExtensions =
+                               {
+                                   {VK_KHR_SURFACE_EXTENSION_NAME, true},
+                                   {VK_KHR_ANDROID_SURFACE_EXTENSION_NAME, true},
+                               },
+                       },
+                   .dcp =
+                       {
+                           .useVmaAllocator = cp.useVmaAllocator,
+                       },
+                   .backBufferFormat = VK_FORMAT_R8G8B8A8_UNORM,
+                   .rayQuery         = _cp.rayQuery,
+                   .createSurface =
+                       [this](const ph::va::VulkanGlobalInfo & vgi) {
+                           // create a surface out of the native window
+                           ph::va::AutoHandle<VkSurfaceKHR> s;
+                           VkAndroidSurfaceCreateInfoKHR    sci {VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
+                           sci.window = _cp.win;
+                           PH_VA_REQUIRE(vkCreateAndroidSurfaceKHR(vgi.instance, &sci, vgi.allocator, s.prepare(vgi)));
+                           return s;
+                       },
+                   .createScene =
+                       [this](auto & app) {
+                           if (_cp.name == "Cornell Box") {
+                               return createScene<CornellBoxScene>(app);
+                           } else if (_cp.name == "Shadow") {
+                               return createScene<ShadowScene>(app);
+                           } else if (_cp.name == "Suzanne") {
+                               return createScene<SuzanneScene>(app);
+                           } else if (_cp.name == "Rocket") {
+                               return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/the-rocket/the-rocket.glb"; });
+                           } else if (_cp.name == "Helmet") {
+                               return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/damaged-helmet/damaged-helmet.gltf"; });
+                           } else if (_cp.name == "Glasses") {
+                               return createScene<SuzanneScene>(app, [this](auto & o) { o.model = "model/cat-eye-glasses.gltf"; });
+                           } else if (_cp.name == "Ring") {
+                               return createScene<OppoRingScene>(app);
+                           } else if (_cp.name == "Garage") {
+                               return createScene<GarageScene>(app);
+                           } else if (_cp.name == "PTDemo") {
+                               return createScene<PathTracerDemo>(app);
+                           } else if (_cp.name == "War") {
+                               return createScene<WarScene>(app);
+                           } else if (_cp.name == "Empty") {
+                               return createScene<EmptyScene>(app);
+                           } else if (_cp.name == "Triangle") {
+                               return createScene<TriangleScene>(app);
+                           } else if (_cp.name == "Blue-tri") {
+                               return createScene<BlueTriangleScene>(app);
+                           } else {
+                               PH_LOGE("Unrecognized demo name: %s.", _cp.name.c_str());
+                               return (SimpleScene *) nullptr;
+                           }
+                       }});
 
-        // Hard coded to 720P for now. The app crashes a lot when set to resolution
-        // higher than this (like 1080P). Root cause is unknown.
-        // Also, this code assume the activity is in landscape orientation.
-        uint32_t h = 720;
+        // Hardcoded to 720P for better perf, assuming the activity is in landscape orientation.
+        uint32_t h = 600;
         uint32_t w = (uint32_t) (h * ANativeWindow_getWidth(_cp.win) / ANativeWindow_getHeight(_cp.win));
 
         // Give the motion controller the window it needs the dimensions of to track the pointer's relative position.
@@ -146,6 +168,7 @@ public:
         _last = curr;
     }
 
+    /// return 1 if the event is processed.
     int32_t handleInputEvent(const AInputEvent * event) {
         // we only care about touch events.
         if (AInputEvent_getType(event) != AINPUT_EVENT_TYPE_MOTION || AInputEvent_getSource(event) != AINPUT_SOURCE_TOUCHSCREEN) { return 0; }
@@ -153,21 +176,14 @@ public:
         // Compose touch event
         std::vector<Touch> touches;
 
-        auto    fullAction  = AMotionEvent_getAction(event);
-        auto    action      = fullAction & AMOTION_EVENT_ACTION_MASK;
-        auto    actionIndex = (fullAction & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
-        int32_t count       = AMotionEvent_getPointerCount(event);
-        // PH_LOGI("touch: action = %d, count = %d, index = %d", action, count, actionIndex);
-
         // Only cares about move and down events.
+        auto action = AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK;
         if (AMOTION_EVENT_ACTION_MOVE == action || AMOTION_EVENT_ACTION_DOWN == action) {
+            int32_t count = AMotionEvent_getPointerCount(event);
             for (int i = 0; i < count; ++i) {
-                // retrieve pointer info
                 auto id = AMotionEvent_getPointerId(event, i);
                 auto x  = AMotionEvent_getX(event, i);
                 auto y  = AMotionEvent_getY(event, i);
-
-                // create new touch event.
                 touches.emplace_back(id, x, y);
             }
         }

@@ -42,6 +42,10 @@ static PFN_vkVoidFunction vkGetDeviceProcAddrStub(void* context, const char* nam
 	return vkGetDeviceProcAddr((VkDevice)context, name);
 }
 
+#ifdef __GNUC__
+#	pragma GCC visibility push(protected)
+#endif
+
 VkResult volkInitialize(void)
 {
 #if defined(_WIN32)
@@ -130,6 +134,10 @@ void volkLoadDeviceTable(struct VolkDeviceTable* table, VkDevice device)
 {
 	volkGenLoadDeviceTable(table, device, vkGetDeviceProcAddrStub);
 }
+
+#ifdef __GNUC__
+#	pragma GCC visibility pop
+#endif
 
 static void volkGenLoadLoader(void* context, PFN_vkVoidFunction (*load)(void*, const char*))
 {

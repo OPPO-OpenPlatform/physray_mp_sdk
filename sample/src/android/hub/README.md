@@ -9,5 +9,5 @@ Now you should be able to invoke the `gradlew` script in this folder to build. R
 We also created a few convenient scripts to make running those most commonly used tasks easier:
 
 - `clean.sh/bat`  : Clears all existing build files to ensure your next build has a fresh start.
-- `compile.sh/bat`: Build all flavors
-- `launch.sh/bat` : Deploy the debug build to your connected Android device, then launch the sample app.
+- `compile.sh/bat`: Build debug flavor. Use "-r" to build release flavor.
+- `launch.py/bat` : Deploy the debug build (or "-r" for release build) APK to your connected Android device, then launch it.

@@ -1,0 +1,36 @@
+#version 460
+
+#extension GL_GOOGLE_include_directive : require
+#include "skinned-mesh.glsl"
+
+#define WORKGROUP_SIZE 32
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer InputVertexBuffer { Vertex _inputVertices[]; };
+layout(std430, set = 0, binding = 1) buffer OutputVertexBuffer { Vertex _outputVertices[]; };
+layout(std430, set = 0, binding = 2) readonly buffer WeightedJointBuffer { WeightedJoint _weightedJoints[]; };
+layout(std430, set = 0, binding = 3) readonly buffer invBindMatBuffer { mat4 _invBindMatrices[]; };
+layout(std430, set = 0, binding = 4) readonly buffer JointsBuffer { mat4 _jointMatrices[]; };
+
+void main() {
+    int index = int(gl_GlobalInvocationID);
+    if (index >= _inputVertices.length()) { return; }
+
+    mat4 skinningMatrix = mat4(0.0);
+
+    vec4  weight = vec4(_weightedJoints[index].weights);
+    uvec4 joint  = uvec4(_weightedJoints[index].joints);
+    skinningMatrix += weight.w * (_jointMatrices[joint.w] * _invBindMatrices[joint.w]);
+    skinningMatrix += weight.x * (_jointMatrices[joint.x] * _invBindMatrices[joint.x]);
+    skinningMatrix += weight.y * (_jointMatrices[joint.y] * _invBindMatrices[joint.y]);
+    skinningMatrix += weight.z * (_jointMatrices[joint.z] * _invBindMatrices[joint.z]);
+
+    vec4 outPos                     = skinningMatrix * vec4(_inputVertices[index].position.xyz, 1.0);
+    _outputVertices[index].position = outPos.xyz;
+
+    vec4 outNor                   = skinningMatrix * vec4(_inputVertices[index].normal.xyz, 1.0);
+    _outputVertices[index].normal = outNor.xyz;
+
+    // vec4 outTan                     = skinningMatrix * vec4(_inputVertices[index].tangent.xyz, 1.0);
+    //_outputVertices[index].tangent  = outNor.xyz;
+}

@@ -1,5 +1,6 @@
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
-namespace ph::va {
+namespace ph {
+namespace va {
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// Helper function to set Vulkan opaque handle's name (VK_EXT_debug_utils).
@@ -21,7 +22,7 @@ inline void setVkObjectName(VkDevice device, T handle, const char * name) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-inline void beginVkDebugLable(VkCommandBuffer cb, const char * label) {
+inline void beginVkDebugLabel(VkCommandBuffer cb, const char * label) {
     if (!vkCmdBeginDebugUtilsLabelEXT) return;
     auto info = VkDebugUtilsLabelEXT {
         VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
@@ -33,7 +34,7 @@ inline void beginVkDebugLable(VkCommandBuffer cb, const char * label) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-inline void endVkDebugLable(VkCommandBuffer cb) {
+inline void endVkDebugLabel(VkCommandBuffer cb) {
     if (!vkCmdEndDebugUtilsLabelEXT) return;
     vkCmdEndDebugUtilsLabelEXT(cb);
 }
@@ -54,4 +55,5 @@ inline void insertVkDebugLable(VkCommandBuffer cb, const char * label) {
 // check if the app is loaded by renderdoc
 bool isRenderDocPresent();
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph

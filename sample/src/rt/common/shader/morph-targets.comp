@@ -1,0 +1,49 @@
+#version 460
+
+#extension GL_GOOGLE_include_directive : enable
+#extension GL_AMD_gpu_shader_int16 : enable // Compiler can't resolve uint16_t without this
+
+struct Vertex {
+    // Position in object space of this vertex.
+    vec3 position;
+    // X coordinate of the texture.
+    float texU;
+    // Normal of the triangle's face at this vertex.
+    vec3 normal;
+    // Y coordinate of the texture.
+    float texV;
+    // A direction in the face's surface.
+    vec3 tangent;
+
+    // material index of the vertex
+    uint16_t material;
+    // TODO: This is a temporary hack to just make skinned meshing possible.
+    // This may or may not be removed in the future, though the purpose of it
+    // will probably change even if it is kept.
+    uint16_t flags;
+};
+
+#define WORKGROUP_SIZE 32
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer InputVertexBuffer { Vertex _inputVertices[]; };
+layout(std430, set = 0, binding = 1) buffer OutputVertexBuffer { Vertex _outputVertices[]; };
+layout(std430, set = 0, binding = 2) readonly buffer WeightsBuffer { float _weights[]; };
+layout(std430, set = 0, binding = 3) readonly buffer TargetsBuffer { Vertex _morphTargets[]; };
+
+void main() {
+    int index = int(gl_GlobalInvocationID);
+    if (index >= _inputVertices.length()) { return; }
+    vec3 newPosition = _inputVertices[index].position;
+    vec3 newNormal   = _inputVertices[index].normal;
+    vec3 newTangent  = _inputVertices[index].tangent;
+    for (int j = 0; j < _weights.length(); j++) {
+        int idx = j * _inputVertices.length() + index; // Assumes vertex order within targets is the same
+        newPosition += _weights[j] * _morphTargets[idx].position;
+        newNormal += _weights[j] * _morphTargets[idx].normal;
+        newTangent += _weights[j] * _morphTargets[idx].tangent;
+    }
+    _outputVertices[index].position = newPosition;
+    _outputVertices[index].normal   = newNormal;
+    _outputVertices[index].tangent  = newTangent;
+}

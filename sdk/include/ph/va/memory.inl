@@ -1,13 +1,14 @@
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 #include <unordered_map>
 
-namespace ph::va {
+namespace ph {
+namespace va {
 
 // ---------------------------------------------------------------------------------------------------------------------
 enum class DeviceMemoryUsage : uint32_t {
-    GPU_ONLY   = 1,
-    CPU_ONLY   = 2,
-    CPU_TO_GPU = 3,
+    GPU_ONLY   = 1, ///< Fast on GPU read and write. No direct CPU access. The only way to update its content is via shader or VK copy command.
+    CPU_ONLY   = 2, ///< Fast on CPU read and write. Very slow GPU access. Suitable as source buffer to upload data to GPU.
+    CPU_TO_GPU = 3, ///< Fast on CPU write and GPU read. Suitable for streaming data from CPU to GPU.
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -28,8 +29,15 @@ inline constexpr VkMemoryPropertyFlags toVkMemoryPropertyFlags(DeviceMemoryUsage
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-PH_API AutoHandle<VkDeviceMemory> allocateDeviceMemory(const VulkanGlobalInfo & g, const VkMemoryRequirements & memRequirements, DeviceMemoryUsage memoryUsage,
-                                                       const VkMemoryAllocateFlags allocFlags = 0);
+PH_API AutoHandle<VkDeviceMemory> allocateDeviceMemory(const VulkanGlobalInfo & g, const VkMemoryRequirements & memRequirements,
+                                                       VkMemoryPropertyFlags memoryProperties, const VkMemoryAllocateFlags allocFlags = 0);
+
+// ---------------------------------------------------------------------------------------------------------------------
+//
+inline AutoHandle<VkDeviceMemory> allocateDeviceMemory(const VulkanGlobalInfo & g, const VkMemoryRequirements & memRequirements, DeviceMemoryUsage memoryUsage,
+                                                       const VkMemoryAllocateFlags allocFlags = 0) {
+    return allocateDeviceMemory(g, memRequirements, toVkMemoryPropertyFlags(memoryUsage), allocFlags);
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
@@ -52,7 +60,8 @@ PH_API void trackDeviceMemoryAllocation(DeviceMemoryTrackLevel level);
 //
 PH_API std::unordered_map<VkDeviceMemory, std::string> getDeviceMemoryAllocationInfo();
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph
 
 namespace std {
 

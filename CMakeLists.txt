@@ -98,13 +98,7 @@ endfunction()
 # PH_add_library(target [sources...])
 #
 function(PH_add_library target)
-    if(PH_BUILD_STATIC)
-        set(LIB_TYPE STATIC)
-    else()
-        set(LIB_TYPE SHARED)
-    endif()
-
-    add_library(${target} ${LIB_TYPE} ${ARGN})
+    add_library(${target} STATIC ${ARGN})
     PH_setup_common_build_flags(${target})
 endfunction()
 
@@ -112,22 +106,6 @@ endfunction()
 #
 function(PH_get_glslc_path glslc)
     if(ANDROID)
-        if(PH_MTK_RT_SDK_PATH)
-            if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL Windows)
-                set(candidate ${PH_MTK_RT_SDK_PATH}/bin/Release/windows/glslc.exe)
-            else()
-                set(candidate ${PH_MTK_RT_SDK_PATH}/bin/Release/linux/glslc)
-            endif()
-
-            if(EXISTS ${candidate})
-                set(${glslc} ${candidate} PARENT_SCOPE)
-                PH_print_status("Use GLSLC from MTK RT SDK: ${candidate}")
-                return()
-            else()
-                PH_warning("${candidate} is missing in MTK RT SDK. We'll have to fallback to system provided executable.")
-            endif()
-        endif()
-
         if(CMAKE_HOST_SYSTEM_NAME STREQUAL Windows)
             set(candidate ${ANDROID_NDK}/shader-tools/windows-x86_64/glslc.exe)
         elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL Linux)
@@ -166,23 +144,6 @@ function(PH_get_glslc_path glslc)
     endif()
 endfunction()
 
-function(PH_get_spvc_path spvc)
-    if(ANDROID AND PH_MTK_RT_SDK_PATH)
-        if(${CMAKE_HOST_SYSTEM_NAME} STREQUAL Windows)
-            set(candidate ${PH_MTK_RT_SDK_PATH}/bin/Release/windows/mtk_rt_spvc.exe)
-        else()
-            set(candidate ${PH_MTK_RT_SDK_PATH}/bin/Release/linux/mtk_rt_spvc)
-        endif()
-
-        if(EXISTS ${candidate})
-            set(${spvc} ${candidate} PARENT_SCOPE)
-            PH_print_status("Use MTK shader patcher from MTK RT SDK: ${candidate}")
-        else()
-            PH_warning("${candidate} is missing in MTK RT SDK. Shader creation will be slow.")
-        endif()
-    endif()
-endfunction()
-
 # Compile GLSL shaders via glslc. Return list of SPIRV files via the first argument.
 #
 # Usage:
@@ -207,13 +168,9 @@ endfunction()
 # GLSLC
 # Specify full path to the glslc executable. If omit, use system default: ${Vulkan_GLSLC_EXECUTABLE}
 #
-# MTK
-# Patch the generated spriv with MTK's special compiler. Default is off. This option should only be used for
-# ray-query shaders running on MTK D9000 platform.
-# This option is ignored when PH_MTK_RT_SDK_PATH is not defined.
 function(PH_compile_glsl_shaders targets)
     # parse the GLSLC argument. If omit, use system default.
-    set(oneValueArgs GLSLC OPT MTK)
+    # set(oneValueArgs GLSLC OPT MTK)
     set(multiValueArgs SOURCES DEFINES)
     cmake_parse_arguments(arg "" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
@@ -221,18 +178,6 @@ function(PH_compile_glsl_shaders targets)
         set(glslc ${arg_GLSLC})
     else()
         PH_get_glslc_path(glslc)
-    endif()
-
-    # PH_print_status("compile ${target} with GLSL compiler: ${glslc}")
-    if(DEFINED arg_MTK)
-        PH_get_spvc_path(spvc)
-
-        if(EXISTS ${spvc})
-            PH_print_status("Patch SPIRV shader with ${spvc}")
-            set(unpatched_appendix ".unpatched")
-        else()
-            set(unpatched_appendix "")
-        endif()
     endif()
 
     if(DEFINED arg_DEFINES)
@@ -320,6 +265,8 @@ if(ANDROID)
 elseif(WIN32)
     set(PH_SDK_LIB_PATH_DEBUG ${PH_SDK_PATH}/win64.Debug/lib)
     set(PH_SDK_LIB_PATH ${PH_SDK_PATH}/win64.Release/lib)
+    set(PH_SDK_BIN_PATH_DEBUG ${PH_SDK_PATH}/win64.Debug/bin)
+    set(PH_SDK_BIN_PATH ${PH_SDK_PATH}/win64.Release/bin)
 else()
     set(PH_SDK_LIB_PATH_DEBUG ${PH_SDK_PATH}/linux64.Debug/lib)
     set(PH_SDK_LIB_PATH ${PH_SDK_PATH}/linux64.Release/lib)
@@ -370,6 +317,17 @@ set_target_properties(physray-rt-asset
     IMPORTED_LOCATION_DEBUG ${PH_SDK_LIB_PATH_DEBUG}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rt-asset${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
 
+# import rt-shared library
+add_library(physray-rt-shared SHARED IMPORTED)
+set_target_properties(physray-rt-shared
+    PROPERTIES
+    IMPORTED_IMPLIB ${PH_SDK_LIB_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rt-shared${CMAKE_STATIC_LIBRARY_SUFFIX}
+    IMPORTED_IMPLIB_DEBUG ${PH_SDK_LIB_PATH_DEBUG}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rt-shared${CMAKE_STATIC_LIBRARY_SUFFIX}
+    IMPORTED_LOCATION ${PH_SDK_BIN_PATH}/${CMAKE_SHARED_LIBRARY_PREFIX}physray-rt-shared${CMAKE_SHARED_LIBRARY_SUFFIX}
+    IMPORTED_LOCATION_DEBUG ${PH_SDK_BIN_PATH_DEBUG}/${CMAKE_SHARED_LIBRARY_PREFIX}physray-rt-shared${CMAKE_SHARED_LIBRARY_SUFFIX}
+)
+
+
 # import rt library
 add_library(physray-rt STATIC IMPORTED)
 set_target_properties(physray-rt
@@ -377,9 +335,20 @@ set_target_properties(physray-rt
     IMPORTED_LOCATION ${PH_SDK_LIB_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rt${CMAKE_STATIC_LIBRARY_SUFFIX}
     IMPORTED_LOCATION_DEBUG ${PH_SDK_LIB_PATH_DEBUG}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rt${CMAKE_STATIC_LIBRARY_SUFFIX}
 )
-target_link_libraries(physray-rt INTERFACE physray-va physray-rt-asset)
+target_link_libraries(physray-rt INTERFACE physray-va physray-rt-asset physray-rt-shared)
+
+# import rps library
+add_library(physray-rps STATIC IMPORTED)
+set_target_properties(physray-rps
+    PROPERTIES
+    IMPORTED_LOCATION ${PH_SDK_LIB_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rps${CMAKE_STATIC_LIBRARY_SUFFIX}
+    IMPORTED_LOCATION_DEBUG ${PH_SDK_LIB_PATH_DEBUG}/${CMAKE_STATIC_LIBRARY_PREFIX}physray-rps${CMAKE_STATIC_LIBRARY_SUFFIX}
+)
+target_link_libraries(physray-rps INTERFACE physray-va)
 
 # ======================================================================================================================
 # build samples
 # ======================================================================================================================
+include(CMakeRC.cmake)
+add_compile_definitions(_SILENCE_CXX20_CISO646_REMOVED_WARNING)
 add_subdirectory(sample/src)

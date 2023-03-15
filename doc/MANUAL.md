@@ -66,14 +66,13 @@ Here's an example code of creating a World class:
 
 ```c++
     // include the public header of the RT module
-    #include <ph/rt.h>
+    #include <ph/rt-utils.h>
 
     // Initialize VK instance with hardware ray query capabilities.
     // Note that this example code creates an offscreen instance.
     // Please check out comments of SimpleVulkanInstance::ConstructParameters
     // for how to create an VK instance that renders to a window.
     ph::va::SimpleVulkanInstance::ConstructParameters icp;
-    ph::rt::setupInstanceConstructionForRayQuery(icp, true);
     ph::va::SimpleVulkanInstance inst(icp);
 
     // Initialize VK device with hardware ray query capabilities.
@@ -157,8 +156,9 @@ classDiagram
 ```
 
 ---
-**IMPORTANT**: In jun22 release, we only support adding items (such as mesh, node, materials) to the
-scene. Removing them from the scene will be added in future release.
+**IMPORTANT**: In jan23 release, we added full support to dynamic scene, including adding/removing/modifying in-game objects, like mesh, node and 
+materials, at runtime. We also refined the mesh interface to allow streaming in GPU generated vertices for ray tracing, which is critical to support 
+in game animation like skeleton. We also added a new demo "warzone" to demonstrate these new features.
 
 ---
 
@@ -195,6 +195,8 @@ render mode. The render mode enumeration defines what kind of ray tracing effect
   
   This mode is the most complete and most time consuming mode that implemented a full path tracer. It is capable of rendering full range of GI effects as well
   as supporting arbitrary shape of light.
+
+<TODO: sample code of rendering>
 
 # Shader Pipeline
 

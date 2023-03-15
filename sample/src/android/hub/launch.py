@@ -12,6 +12,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("-s", dest="device", help="Specify serial number of the Android device")
 ap.add_argument("-r", action="store_true", help="Launch Release build instead of Debug build.")
 ap.add_argument("-G", action="store_true", help="Launch Garage scene).")
+ap.add_argument("-W", action="store_true", help="Launch War scene).")
 ap.add_argument("-R", action="store_true", help="Launch OPPO Ring scene).")
 ap.add_argument("-P", action="store_true", help="Launch PathTracerDemo scene).")
 ap.add_argument("-T", action="store_true", help="Launch test activity).")
@@ -36,6 +37,7 @@ if not args.I:
 # Determine the activity
 activity = "MainActivity"
 if args.G: activity = "GarageActivity"
+if args.W: activity = "WarActivity"
 if args.R: activity = "RingActivity"
 if args.P: activity = "PTDemoActivity"
 if args.T: activity = "TestActivity"

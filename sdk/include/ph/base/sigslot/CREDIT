@@ -1,0 +1,3 @@
+This folder contains a partial copy of palacase/sigslot library found here: https://github.com/palacaze/sigslot
+
+It is currently sync to this commit: https://github.com/palacaze/sigslot/commit/f8c275df5037bfb6d57c74168634b65fdbfb44f3

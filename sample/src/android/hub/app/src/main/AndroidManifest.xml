@@ -67,6 +67,16 @@
             android:configChanges="orientation|screenSize|keyboardHidden">
             <meta-data android:name="android.app.lib_name" android:value="hub" />
         </activity>
+
+        <!-- War activity -->
+        <activity
+            android:name=".WarActivity"
+            android:exported="true"
+            android:label="@string/war_app_name"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <meta-data android:name="android.app.lib_name" android:value="hub" />
+        </activity>
     </application>
 
 </manifest>

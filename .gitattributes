@@ -3,3 +3,4 @@
 *.apk filter=lfs diff=lfs merge=lfs -text
 *.zip filter=lfs diff=lfs merge=lfs -text
 sample/bin/linux64.Debug/* filter=lfs diff=lfs merge=lfs -text
+sdk/linux64.Debug/lib/libphysray-rt-shared.so filter=lfs diff=lfs merge=lfs -text

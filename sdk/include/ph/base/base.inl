@@ -1,4 +1,4 @@
-#pragma once
+// this file is part of base.h. Do not include it direclty in your own header. Always include base.h.
 
 #include <algorithm>
 #include <array>
@@ -41,6 +41,12 @@
 #endif
 
 #ifdef __ANDROID__
+    // Usually, ANDROID macro should be automatially defined by cmake script in NDK.
+    // In rare cases though, this step could be skipped. So we have to explicitly
+    // define this macro here.
+    #ifndef ANDROID
+        #define ANDROID 1
+    #endif
     #define PH_ANDROID 1
 #else
     #define PH_ANDROID 0
@@ -59,28 +65,8 @@
     #define PH_32BIT 1
 #endif
 
-/// macros to import/export function from shared library.
-//@{
-#ifdef _MSC_VER
-    #define PH_IMPORT __declspec(dllimport)
-#else
-    #define PH_IMPORT
-#endif
-
-#ifdef _MSC_VER
-    #define PH_EXPORT __declspec(dllexport)
-#else
-    #define PH_EXPORT __attribute__ ((visibility("default"))
-#endif
-
-#if PH_BUILD_STATIC
-    #define PH_API
-#elif defined(PH_INTERNAL)
-    #define PH_API PH_EXPORT
-#else
-    #define PH_API PH_IMPORT
-#endif
-//@}
+/// obsolete. to-be-removed.
+#define PH_API
 
 #ifdef _MSC_VER
     #define PH_FUNCSIG __FUNCSIG__
@@ -88,6 +74,25 @@
     #define PH_FUNCSIG __PRETTY_FUNCTION__
 #else
     #define PH_FUNCSIG __func__
+#endif
+
+/// determine C++ standard
+#ifdef _MSC_VER
+    #if _MSVC_LANG < 201703L
+        #error "C++17 is required"
+    #elif _MSVC_LANG < 202002L
+        #define PH_CXX_STANDARD 17
+    #else
+        #define PH_CXX_STANDARD 20
+    #endif
+#else
+    #if __cplusplus < 201703L
+        #error "c++17 or higher is required"
+    #elif __cplusplus < 202002L
+        #define PH_CXX_STANDARD 17
+    #else
+        #define PH_CXX_STANDARD 20
+    #endif
 #endif
 
 /// Log macros
@@ -145,29 +150,33 @@
     } while (0)
 
 /// Check for required condition, call the failure clause if the condition is not met.
-#define PH_CHK(x, action_on_false)                     \
-    if (!(x)) {                                        \
-        PH_LOG(, E, "Condition (" #x ") didn't met."); \
-        action_on_false;                               \
-    } else                                             \
+#define PH_CHK(x, ...) \
+    if (!(x)) {        \
+        __VA_ARGS__;   \
+    } else             \
         void(0)
 
 /// Check for required conditions. Throw runtime error exception when the condition is not met.
-#define PH_REQUIRE(x) PH_CHK(x, PH_THROW(#x))
+#define PH_REQUIRE2(x, ...) PH_CHK(x, PH_THROW(__VA_ARGS__))
+
+/// Check for required conditions. Throw runtime error exception when the condition is not met.
+#define PH_REQUIRE(x) PH_REQUIRE2(x, #x)
 
 /// Runtime assertion for debug build. The assertion failure triggers debug-break signal in debug build.
 /// It is no-op in profile and release build, thus can be used in performance critical code path.
 //@{
 #if PH_BUILD_DEBUG
-    #define PH_ASSERT(x, ...)                  \
-        if (!(x)) {                            \
-            PH_LOGE("ASSERT failure: %s", #x); \
-            ::ph::breakIntoDebugger();         \
-        } else                                 \
+    #define PH_ASSERT2(x, ...)                       \
+        if (!(x)) {                                  \
+            PH_LOGE("ASSERT failure: " __VA_ARGS__); \
+            ::ph::breakIntoDebugger();               \
+        } else                                       \
             void(0)
+    #define PH_ASSERT(x) PH_ASSERT2(x, "%s", #x);
 #else
-    #define PH_ASSERT(...) (void) 0
+    #define PH_ASSERT2(...) (void) 0
 #endif
+#define PH_ASSERT(x) PH_ASSERT2(x, "%s", #x);
 //@}
 
 /// disable copy semantic of a class.
@@ -181,7 +190,7 @@
     X & operator=(X &&) = delete
 
 /// disable both copy and move semantic of a class.
-#define PH_NO_COPY_NO_NOVE(X) \
+#define PH_NO_COPY_NO_MOVE(X) \
     PH_NO_COPY(X);            \
     PH_NO_MOVE(X)
 
@@ -247,15 +256,17 @@ namespace log { // namespace for log implementation details
 
 class PH_API Controller {
 
-    static struct PH_API Globals {
+public:
+    struct PH_API Globals {
         std::mutex                          m;
         Controller *                        root;
         int                                 severity;
         std::map<std::string, Controller *> instances;
         Globals();
         ~Globals();
-    } g;
+    };
 
+private:
     std::string _tag;
     bool        _enabled = true;
 
@@ -264,23 +275,23 @@ class PH_API Controller {
     ~Controller() = default;
 
 public:
-    static inline Controller * getInstance() { return g.root; }
+    static Controller *        getInstance();
     static inline Controller * getInstance(Controller * c) { return c; }
     static Controller *        getInstance(const char * tag);
 
-    bool enabled(int severity) const { return _enabled && severity <= g.severity; }
+    bool enabled(int severity) const;
 
     const std::string & tag() const { return _tag; }
 };
 
 namespace macros {
 
-inline constexpr int F = 0;  // fatal
-inline constexpr int E = 10; // error
-inline constexpr int W = 20; // warning
-inline constexpr int I = 30; // informational
-inline constexpr int V = 40; // verbose
-inline constexpr int B = 50; // babble
+constexpr int F = 0;  // fatal
+constexpr int E = 10; // error
+constexpr int W = 20; // warning
+constexpr int I = 30; // informational
+constexpr int V = 40; // verbose
+constexpr int B = 50; // babble
 
 inline Controller * c(const char * str = nullptr) { return Controller::getInstance(str); }
 
@@ -387,14 +398,24 @@ inline const char * errno2str(int error) {
 #endif
 }
 
-/// dump current callstck to string
-PH_API std::string backtrace(int indent = 0);
+/// dump current call stack to string
+PH_API std::string backtrace(bool includeSourceSnippet = PH_BUILD_DEBUG);
+
+/// Register the most common signals and other callbacks to segfault, hardware exception, un-handled exception etc.
+/// Currently only implemented on Linux.
+PH_API void registerSignalHandlers();
 
 /// allocated aligned memory. The returned pointer must be freed by
 PH_API void * aalloc(size_t alignment, size_t bytes);
 
 /// free memory allocated by aalloc()
 PH_API void afree(void *);
+
+/// delete and clear an object pointer.
+template<typename T>
+void safeDelete(T *& p) {
+    if (p) delete p, p = nullptr;
+}
 
 /// Return's pointer to the internal storage. The content will be overwritten
 /// by the next call on the same thread.
@@ -430,7 +451,11 @@ PH_API std::string getExecutablePath();
 /// Return full path to the folder of the current executable
 PH_API std::string getExecutableFolder();
 
-/// call exit function automatically at scope exit
+/// Call exit function automatically at scope exit
+/// \example Call cleanup() automatically at the end of the scope in which variable "end" is declared.
+///
+///     auto end = ScopeExit([&] { cleanup(); });
+///
 template<typename PROC>
 class ScopeExit {
     PROC _proc;
@@ -456,52 +481,15 @@ public:
     void dismiss() { _active = false; }
 };
 
-/// A simple 128-bit integer class. This can also be used to hold a GUID.
-union UInt128 {
-    struct {
-        uint64_t lo;
-        uint64_t hi;
-    };
-    uint64_t u64[2];
-    uint32_t u32[4];
-    uint16_t u16[8];
-    uint8_t  u8[16];
-
-    bool operator==(const UInt128 & rhs) const { return lo == rhs.lo && hi == rhs.hi; }
-
-    bool operator!=(const UInt128 & rhs) const { return lo != rhs.lo || hi != rhs.hi; }
-
-    bool operator<(const UInt128 & rhs) const { return (hi != rhs.hi) ? (hi < rhs.hi) : (lo < rhs.lo); }
-
-    static UInt128 make(uint64_t lo, uint64_t hi) {
-        UInt128 r;
-        r.lo = lo;
-        r.hi = hi;
-        return r;
-    }
-
-    /// Make a 128 bit integer from GUID in form of: {aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee}
-    static UInt128 make(uint32_t a, uint16_t b, uint16_t c, uint16_t d, uint64_t e) {
-        UInt128 r;
-        r.lo     = e;
-        r.u16[3] = d;
-        r.u16[4] = c;
-        r.u16[5] = b;
-        r.u32[3] = a;
-        return r;
-    }
-};
-static_assert(128 == sizeof(UInt128) * 8);
-
 /// Commonly used math constants
 //@{
-inline static constexpr float PI         = 3.1415926535897932385f;
-inline static constexpr float QUARTER_PI = (PI / 4.0f);
-inline static constexpr float HALF_PI    = (PI / 2.0f);
-inline static constexpr float TWO_PI     = (PI * 2.0f);
+constexpr float PI         = 3.1415926535897932385f;
+constexpr float QUARTER_PI = (PI / 4.0f);
+constexpr float HALF_PI    = (PI / 2.0f);
+constexpr float TWO_PI     = (PI * 2.0f);
 //@}
 
-// Basic math utlities
+// Basic math utilities
 //@{
 
 // -----------------------------------------------------------------------------
@@ -581,6 +569,18 @@ inline constexpr T clamp(T value, const T & vmin, const T & vmax) {
 }
 
 // -----------------------------------------------------------------------------
+// Clamp a range of [offset, offset +length) into range of [0, capacity)
+template<typename T>
+inline void clampRange(T & offset, T & length, T capacity) {
+    if (length > capacity) length = capacity;
+    T end  = offset + length;
+    offset = clamp<T>(offset, 0, capacity);
+    end    = clamp<T>(end, offset, capacity);
+    PH_ASSERT(end >= offset);
+    length = end - offset;
+}
+
+// -----------------------------------------------------------------------------
 /// align numeric value up to the next multiple of the alignment.
 /// Note that the alignment must be 2^N.
 template<typename T>
@@ -597,7 +597,7 @@ inline constexpr T nextMultiple(const T & value, const T & alignment) {
 ///
 ///     template<typename T>
 ///     void foo() {
-///         if constexpr (contdition1<T>) { ... }
+///         if constexpr (condition1<T>) { ... }
 ///         else if constexpr (condition2<T>) { ... }
 ///         else {
 ///             // generate build error if neither condition1 nor condition2 are met.
@@ -617,16 +617,12 @@ class StackArray {
 
     /// default construct
     static inline void ctor(T * ptr, SIZE_TYPE count) {
-        for (SIZE_TYPE i = 0; i < count; ++i, ++ptr) {
-            new (ptr) T();
-        }
+        for (SIZE_TYPE i = 0; i < count; ++i, ++ptr) { new (ptr) T(); }
     }
 
     /// construct from known value
     static inline void ctor(T * ptr, SIZE_TYPE count, const T & value) {
-        for (SIZE_TYPE i = 0; i < count; ++i, ++ptr) {
-            new (ptr) T(value);
-        }
+        for (SIZE_TYPE i = 0; i < count; ++i, ++ptr) { new (ptr) T(value); }
     }
 
     /// destructor
@@ -634,9 +630,7 @@ class StackArray {
 
     void doClear() {
         T * p = data();
-        for (SIZE_TYPE i = 0; i < _count; ++i, ++p) {
-            dtor(p);
-        }
+        for (SIZE_TYPE i = 0; i < _count; ++i, ++p) { dtor(p); }
         _count = 0;
     }
 
@@ -645,19 +639,13 @@ class StackArray {
         const T * src = other.data();
 
         SIZE_TYPE mincount = std::min<SIZE_TYPE>(_count, other._count);
-        for (SIZE_TYPE i = 0; i < mincount; ++i) {
-            dst[i] = src[i];
-        }
+        for (SIZE_TYPE i = 0; i < mincount; ++i) { dst[i] = src[i]; }
 
         // destruct extra objects, only when other._count < _count
-        for (SIZE_TYPE i = other._count; i < _count; ++i) {
-            dtor(dst + i);
-        }
+        for (SIZE_TYPE i = other._count; i < _count; ++i) { dtor(dst + i); }
 
         // copy-construct new objects, only when _count < other._count
-        for (SIZE_TYPE i = _count; i < other._count; ++i) {
-            new (dst + i) T(src[i]);
-        }
+        for (SIZE_TYPE i = _count; i < other._count; ++i) { new (dst + i) T(src[i]); }
 
         _count = other._count;
     }
@@ -707,14 +695,10 @@ class StackArray {
         T * p = data();
 
         // destruct extra objects, only when count < _count
-        for (SIZE_TYPE i = count; i < _count; ++i) {
-            dtor(p + i);
-        }
+        for (SIZE_TYPE i = count; i < _count; ++i) { dtor(p + i); }
 
         // construct new objects, only when _count < count
-        for (SIZE_TYPE i = _count; i < count; ++i) {
-            ctor(p + i, 1);
-        }
+        for (SIZE_TYPE i = _count; i < count; ++i) { ctor(p + i, 1); }
 
         _count = count;
     }
@@ -817,105 +801,7 @@ public:
     //@}
 };
 
-/// A binary block that can't resize at all. Its difference to std::array is that its size is determined at runtime.
-/// The memory is allocated on heap, not stack. It does not move or copy elements. So the class T can have both move and
-/// copy operators deleted. The only requirement to T is that it must have default constructor.
-///
-/// This class can be used to pass binary data around (like across DLL boundaries), w/o dependencies to STL.
-template<typename T>
-class Blob {
-    T *    _ptr  = nullptr;
-    size_t _size = 0;
-
-public:
-    Blob() = default;
-
-    Blob(size_t n) { discardAndReallocate(n); }
-
-    Blob(const T * begin, const T * end) {
-        size_t n = (end - begin);
-        discardAndReallocate(n);
-        if (n > 0) { memcpy(_ptr, begin, n * sizeof(T)); }
-    }
-
-    /// Copy data from vector.
-    Blob(const std::vector<T> & v): Blob(v.data(), v.data() + v.size()) {}
-
-    /// Move data from vector is not allowed
-    Blob(std::vector<T> && v) = delete;
-
-    PH_NO_COPY(Blob);
-
-    // can move
-    Blob(Blob && that) {
-        _ptr       = that._ptr;
-        that._ptr  = nullptr;
-        _size      = that._size;
-        that._size = 0;
-    }
-    Blob & operator=(Blob && that) {
-        if (this != &that) {
-            deallocate();
-            _ptr       = that._ptr;
-            that._ptr  = nullptr;
-            _size      = that._size;
-            that._size = 0;
-        }
-        return *this;
-    }
-
-    ~Blob() { deallocate(); }
-
-    /// IMPORTANT: this method is different from std::vector::resize() that it does _NOT_ preserve old content.
-    void discardAndReallocate(size_t n) {
-        deallocate();
-        if (n > 0) {
-            _ptr  = new T[n];
-            _size = n;
-        }
-    }
-
-    void deallocate() {
-        if (_ptr) {
-            delete[] _ptr;
-            _ptr = nullptr;
-        }
-        _size = 0;
-    }
-
-    /// Copy data to std::vector
-    std::vector<T> toStdVector() const { return std::vector<T>(_ptr, _ptr + _size); }
-
-    /// make a clone of the current blob
-    Blob<T> clone() const { return Blob<T>(begin(), end()); }
-
-    bool empty() const { return !_ptr; }
-
-    auto size() const -> size_t { return _size; }
-
-    auto data() -> T * { return _ptr; }
-    auto data() const -> const T * { return _ptr; }
-
-    auto begin() -> T * { return _ptr; }
-    auto begin() const -> const T * { return _ptr; }
-
-    auto end() -> T * { return _ptr + _size; }
-    auto end() const -> const T * { return _ptr + _size; }
-
-    auto back() -> T & { return _ptr[_size - 1]; }
-    auto back() const -> const T & { return _ptr[_size - 1]; }
-
-    auto operator[](size_t index) const -> const T & {
-        PH_ASSERT(index < _size);
-        return _ptr[index];
-    }
-    auto operator[](size_t index) -> T & {
-        PH_ASSERT(index < _size);
-        return _ptr[index];
-    }
-};
-
-/// Represents a non-resizealbe list of elements. The range is fixed. But the content/elemnts could be mutable.
+/// Represents a non-resizable list of elements. The range is fixed. But the content/elements could be mutable.
 template<typename T, typename SIZE_T = size_t>
 class MutableRange {
     T *    _ptr;  ///< pointer to the first element in the list.
@@ -928,7 +814,10 @@ public:
 
     MutableRange(std::vector<T> & v): _ptr(v.data()), _size(v.size()) {}
 
-    MutableRange(Blob<T> & v): _ptr(v.data()), _size((SIZE_T) v.size()) {}
+    MutableRange(std::initializer_list<T> v): _ptr(v.begin()), _size((SIZE_T) v.size()) {}
+
+    template<SIZE_T N>
+    MutableRange(T (&array)[N]): _ptr(array), _size(N) {}
 
     template<SIZE_T N>
     MutableRange(StackArray<T, N> & v): _ptr(v.data()), _size(v.size()) {}
@@ -940,10 +829,18 @@ public:
 
     PH_DEFAULT_MOVE(MutableRange);
 
-    void clear() {
+    MutableRange & clear() {
         _ptr  = nullptr;
         _size = 0;
+        return *this;
     }
+
+    MutableRange & reset(T * ptr, SIZE_T size) {
+        _ptr  = ptr;
+        _size = size;
+        return *this;
+    }
+
     bool   empty() const { return 0 == _ptr || 0 == _size; }
     SIZE_T size() const { return _size; }
     T *    begin() const { return _ptr; }
@@ -956,7 +853,7 @@ public:
     T & operator[](SIZE_T i) const { return at(i); }
 };
 
-/// Represents a constant non-resizealbe list of elements.
+/// Represents a constant non-resizable list of elements.
 template<typename T, typename SIZE_T = size_t>
 class ConstRange {
     const T * _ptr;  ///< pointer to the first element in the list.
@@ -971,7 +868,14 @@ public:
 
     constexpr ConstRange(const std::vector<T> & v): _ptr(v.data()), _size((SIZE_T) v.size()) {}
 
-    constexpr ConstRange(const Blob<T> & v): _ptr(v.data()), _size((SIZE_T) v.size()) {}
+#if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Winit-list-lifetime"
+#endif
+    constexpr ConstRange(const std::initializer_list<T> & v): _ptr(v.begin()), _size((SIZE_T) v.size()) {}
+#if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic pop
+#endif
 
     template<SIZE_T N>
     constexpr ConstRange(const T (&array)[N]): _ptr(array), _size(N) {}
@@ -986,15 +890,20 @@ public:
 
     PH_DEFAULT_MOVE(ConstRange);
 
-    void clear() {
+    ConstRange & clear() {
         _ptr  = nullptr;
         _size = 0;
+        return *this;
     }
 
-    constexpr bool empty() const { return 0 == _ptr || 0 == _size; }
+    ConstRange & reset(const T * ptr, SIZE_T size) {
+        _ptr  = ptr;
+        _size = size;
+        return *this;
+    }
 
-    constexpr SIZE_T size() const { return _size; }
-
+    constexpr bool      empty() const { return 0 == _ptr || 0 == _size; }
+    constexpr SIZE_T    size() const { return _size; }
     constexpr const T * begin() const { return _ptr; }
     constexpr const T * end() const { return _ptr + _size; }
     constexpr const T * data() const { return _ptr; }
@@ -1004,7 +913,7 @@ public:
     }
     constexpr const T & operator[](SIZE_T i) const { return at(i); }
 
-    /// conver to std::initialize_list
+    /// convert to std::initialize_list
     constexpr std::initializer_list<T> il() const { return std::initializer_list<T>(_ptr, _ptr + _size); }
 };
 
@@ -1027,9 +936,9 @@ struct ScopedCpuTrace {
 /// TODO: move to base module
 template<typename T>
 struct NumericalAverager {
-    ph::Blob<T> buffer;
-    size_t      cursor = 0; // point to the next empty space in the buffer.
-    T           low = T {0}, high = T {0}, average = T {0};
+    std::vector<T> buffer;
+    size_t         cursor = 0; // point to the next empty space in the buffer.
+    T              low = T {0}, high = T {0}, average = T {0};
 
     NumericalAverager(size_t N_ = 60, std::chrono::high_resolution_clock::duration refreshInterval = std::chrono::seconds(1))
         : buffer(N_), _refreshInternal(refreshInterval) {
@@ -1038,9 +947,7 @@ struct NumericalAverager {
     }
 
     NumericalAverager & reset() {
-        for (size_t i = 0; i < buffer.size(); ++i) {
-            buffer[i] = T {0};
-        }
+        for (size_t i = 0; i < buffer.size(); ++i) { buffer[i] = T {0}; }
         cursor  = 0;
         low     = T {0};
         high    = T {0};

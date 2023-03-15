@@ -131,7 +131,7 @@ union ColorFormat {
     ///
     /// Layout descriptors. Indexed by the layout enum value.
     ///
-    inline static constexpr LayoutDesc LAYOUTS[] = {
+    static constexpr LayoutDesc LAYOUTS[] = {
         // clang-format off
         //BW  BH  BB   CH      CH0        CH1          CH2          CH3
         { 0 , 0 , 0  , 0 , { { 0 , 0  }, { 0  , 0  }, { 0  , 0  }, { 0  , 0  } } }, //LAYOUT_UNKNOWN,
@@ -202,8 +202,8 @@ union ColorFormat {
         { 12, 12, 16 , 4 , { { 0 , 0  }, { 0  , 0  }, { 0  , 0  }, { 0  , 0  } } }, //LAYOUT_ASTC_12x12_SFLOAT,
         // clang-format on
     };
-    static_assert(std::size(LAYOUTS) == NUM_COLOR_LAYOUTS);
-    static_assert(LAYOUTS[LAYOUT_UNKNOWN].blockWidth == 0);
+    static_assert(std::size(LAYOUTS) == NUM_COLOR_LAYOUTS, "LAYOUTs array size is wrong.");
+    static_assert(LAYOUTS[LAYOUT_UNKNOWN].blockWidth == 0, "LAYOUT_UNKNOWN's blockWidth must be 0.");
 
     ///
     /// color sign
@@ -548,36 +548,79 @@ union ColorFormat {
 
     // clang-format on
 };
-static_assert(4 == sizeof(ColorFormat));
-static_assert(ColorFormat::UNKNOWN().layoutDesc().blockWidth == 0);
-static_assert(!ColorFormat::UNKNOWN().valid());
-static_assert(ColorFormat::UNKNOWN().empty());
-static_assert(ColorFormat::RGBA8().valid());
-static_assert(!ColorFormat::RGBA8().empty());
-static_assert(ColorFormat::ASTC_12x12_SFLOAT().valid());
+static_assert(4 == sizeof(ColorFormat), "size of ColorFormat must be 4");
+static_assert(ColorFormat::UNKNOWN().layoutDesc().blockWidth == 0, "UNKNOWN format's block width must be 0");
+static_assert(!ColorFormat::UNKNOWN().valid(), "UNKNOWN format must be invalid.");
+static_assert(ColorFormat::UNKNOWN().empty(), "UNKNOWN format must be empty.");
+static_assert(ColorFormat::RGBA8().valid(), "RGBA8 format must be valid.");
+static_assert(!ColorFormat::RGBA8().empty(), "RGBA8 format must _NOT_ be empty.");
+static_assert(ColorFormat::ASTC_12x12_SFLOAT().valid(), "ASTC_12x12_SFLOAT must be a valid format.");
 
-// TODO: a template function?
-#define PH_GET_BIT_FIELD_WIDTH(T, f)       \
-    []() constexpr->unsigned int {         \
-        T            t {};                 \
-        unsigned int bitCount = 0;         \
-        for (t.f = 1; t.f != 0; t.f <<= 1) \
-            ++bitCount;                    \
-        return bitCount;                   \
-    }                                      \
-    ()
+// Helper constexpr functions
+namespace BitFieldDetails {
+template<typename T>
+constexpr auto getBitsCount(T data, size_t startBit = 0) -> typename std::enable_if<std::is_unsigned<T>::value, size_t>::type {
+    return (startBit == sizeof(T) * 8) ? 0 : getBitsCount(data, startBit + 1) + ((data & (1ull << startBit)) ? 1 : 0);
+}
 
-// Make sure that all layouts can fit into the ColorFormat::layout field. If this asset failed, then you have more layouts defined
-// then the ColorFormat::layout field can hold. In this case, you either need to delete some layouts, or increase size of
-// ColorFormat::layout field.
+// We should support unsigned enums too
+template<typename T>
+constexpr auto getBitsCount(T data, size_t startBit = 0) -> typename std::enable_if<std::is_enum<T>::value, size_t>::type {
+    return (startBit == sizeof(T) * 8)
+               ? 0
+               : getBitsCount(data, startBit + 1) + ((static_cast<typename std::underlying_type<T>::type>(data) & (1ull << startBit)) ? 1 : 0);
+}
+
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wbitfield-constant-conversion"
+    #pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
+#ifdef __GNUC__
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Woverflow"
+#endif
 #ifdef _MSC_VER
     #pragma warning(push)
     #pragma warning(disable : 4463) // overflow
 #endif
-static_assert(ColorFormat::NUM_COLOR_LAYOUTS < (1u << PH_GET_BIT_FIELD_WIDTH(ColorFormat, layout)));
+template<typename StructType, typename StructFieldsType, StructFieldsType... initVals>
+constexpr StructType getFilledStructImpl(StructType s, ...) {
+    return s;
+}
+
+template<typename StructType, typename StructFieldsType, StructFieldsType... initVals>
+constexpr StructType getFilledStructImpl(StructType, decltype(StructType {initVals...}, int()) = 0) {
+    // can you numeric_limits::max() here instead of -1, but it will require casting to and from underlying type for enum
+    return getFilledStructImpl<StructType, StructFieldsType, initVals..., static_cast<StructFieldsType>(-1)>(StructType {initVals...}, 0);
+}
+
+template<typename StructType, typename StructFieldsType>
+constexpr StructType getFilledStruct() {
+    using UnderlyingStructType =
+        typename std::conditional<std::is_enum<StructFieldsType>::value, std::underlying_type<StructFieldsType>, std::remove_cv<StructFieldsType>>::type::type;
+    static_assert(std::is_unsigned<UnderlyingStructType>::value, "Bit field calculation only works with unsigned values");
+    return getFilledStructImpl<StructType, StructFieldsType>(StructType {}, 0);
+}
+#ifdef __GNUC__
+    #pragma GCC diagnostic pop
+#endif
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#endif
 #ifdef _MSC_VER
     #pragma warning(pop)
 #endif
+} // namespace BitFieldDetails
+
+// Get bit field size at compile time
+#define PH_GET_BIT_FIELD_WIDTH(structType, fieldName) \
+    BitFieldDetails::getBitsCount(BitFieldDetails::getFilledStruct<structType, decltype(structType {}.fieldName)>().fieldName)
+
+// Make sure that all layouts can fit into the ColorFormat::layout field. If this asset failed, then you have more layouts defined
+// then the ColorFormat::layout field can hold. In this case, you either need to delete some layouts, or increase size of
+// ColorFormat::layout field.
+static_assert(ColorFormat::NUM_COLOR_LAYOUTS < (1u << PH_GET_BIT_FIELD_WIDTH(ColorFormat, layout)), "");
 
 ///
 /// compose RGBA8 color constant
@@ -619,7 +662,7 @@ union RGBA8 {
     uint32_t u32;
     uint8_t  u8[4];
 
-    static RGBA8 make(uint8_t r, uint8_t g, uint8_t b, uint8_t a) { return {{r, g, b, a}}; }
+    static RGBA8 make(uint8_t r, uint8_t g = 0, uint8_t b = 0, uint8_t a = 0) { return {{r, g, b, a}}; }
 
     static RGBA8 make(const uint8_t * p) { return {{p[0], p[1], p[2], p[3]}}; }
 
@@ -628,8 +671,15 @@ union RGBA8 {
         result.u32 = u;
         return result;
     }
+
+    void set(uint8_t r_, uint8_t g_ = 0, uint8_t b_ = 0, uint8_t a_ = 0) {
+        r = r_;
+        g = g_;
+        b = b_;
+        a = a_;
+    }
 };
-static_assert(sizeof(RGBA8) == 4);
+static_assert(sizeof(RGBA8) == 4, "");
 
 union float4 {
     struct {
@@ -646,7 +696,7 @@ union float4 {
 
     static float4 make(const float * p) { return {{p[0], p[1], p[2], p[3]}}; }
 };
-static_assert(sizeof(float4) == 128 / 8);
+static_assert(sizeof(float4) == 128 / 8, "");
 
 /// This represents a single 1D/2D/3D image in an more complex image structure.
 /// Note: avoid using size_t in this structure. So the size of the structure will never change,
@@ -731,12 +781,12 @@ struct ImagePlaneDesc {
     /// Create a new image plane descriptor
     static ImagePlaneDesc make(ColorFormat format, size_t width, size_t height = 1, size_t depth = 1, size_t step = 0, size_t pitch = 0, size_t slice = 0);
 
-    /// Save the image plane to PNG stream. This method only supports 8-bit and 16-bit image.
+    /// Save the image plane to PNG stream. This method only supports 8-bit and 16-bit 2D image.
     /// \param stream  Target stream
     /// \param pixels  The pixel array. The buffer length should be no less than ImagePlaneDesc::size.
     ///                Or else, the behavior is undefined.
     /// \param z       Specify the z slice to save (only applied to 3D image)
-    void saveToPNG(std::ostream & stream, const void * pixels, uint32_t z = 0) const;
+    void saveToPNG(std::ostream & stream, const void * pixels) const;
 
     /// Save the image plane to PNG file.
     template<class... ARGS>
@@ -745,13 +795,14 @@ struct ImagePlaneDesc {
         saveToPNG(s, args...);
     }
 
-    /// Save the image plane to JPG stream. This method only supports 8-bit and 16-bit image.
+    /// Save the image plane to JPG stream. Only supports 8-bit and 16-bit 2D image.
     /// \param stream   Target stream
     /// \param pixels   The pixel array The buffer length should be no less than ImagePlaneDesc::size.
+    /// \param z       Specify the z slice to save (only applied to 3D image)
     /// \param quality  Compression quality. Valid range is [1, 100];
-    void saveToJPG(std::ostream & stream, const void * pixels, uint32_t z = 0, int quality = 80) const;
+    void saveToJPG(std::ostream & stream, const void * pixels, int quality = 100) const;
 
-    /// Save the image plane to JPB file.
+    /// Save the image plane to JPB file. Only supports 8-bit and 16-bit 2D image.
     template<class... ARGS>
     void saveToJPG(std::string & filename, ARGS... args) const {
         auto s = openFileStream(filename);
@@ -759,7 +810,7 @@ struct ImagePlaneDesc {
     }
 
     /// Save the image to .HDR stream. This method will try convert everything to float4
-    void saveToHDR(std::ostream & stream, const void * pixels, uint32_t z = 0) const;
+    void saveToHDR(std::ostream & stream, const void * pixels) const;
 
     /// Save the image plane to .HDR file.
     template<class... ARGS>
@@ -768,16 +819,26 @@ struct ImagePlaneDesc {
         saveToHDR(s, args...);
     }
 
-    /// A general save function. Use extension to determin file format.
-    void save(const std::string & filename, const void * pixels, uint32_t z = 0) const;
+    /// Save the image to .RAW stream.
+    void saveToRAW(std::ostream & stream, const void * pixels) const;
+
+    // Save the image as raw file
+    template<class... ARGS>
+    void saveToRAW(std::string & filename, ARGS... args) const {
+        auto s = openFileStream(filename);
+        saveToHDR(s, args...);
+    }
+
+    /// A general save function. Use extension to determine file format.
+    void save(const std::string & filename, const void * pixels) const;
 
     /// Convert the specified slice of the image plane to float4 format.
     /// \return Pixel data in float4 format.
-    std::vector<float4> toFloat4(const void * src, uint32_t z = 0) const;
+    std::vector<float4> toFloat4(const void * src) const;
 
     /// Convert the specified slice of the image plane to R8G8B8A8_UNORM format.
     /// \return Pixel data in R8G8B8A8_UNORM format.
-    std::vector<RGBA8> toRGBA8(const void * src, uint32_t z = 0) const;
+    std::vector<RGBA8> toRGBA8(const void * src) const;
 
     /// Load data to specific slice of image plane from float4 data.
     void fromFloat4(void * dst, size_t dstSize, size_t dstZ, const void * src) const;
@@ -819,12 +880,13 @@ struct ImageDesc {
 
     //@{
 
+    /// @brief  Default constructor
     ImageDesc() = default;
 
-    /// Defines how pixels pakced in memory.
+    /// Defines how pixels packed in memory.
     /// Note that this only affects how plane offset are calculated. The 'planes' data member in this structure
     /// is always indexed in mip level major fashion.
-    enum ConsructionOrder {
+    enum ConstructionOrder {
         /// In this mode, pixels from same mipmap level are packed together. For example, given a cubemap with
         /// 6 faces and 3 mipmap levels, the pixels are packed in memory in this order:
         ///
@@ -863,16 +925,14 @@ struct ImageDesc {
         FACE_MAJOR,
     };
 
-    ///
-    /// Construct image descriptor from basemap and layer/level count. If anything goes wrong,
+    /// Construct image descriptor from base map and layer/level count. If anything goes wrong,
     /// construct an empty image descriptor.
     ///
-    /// \param basemap the base image
+    /// \param baseMap the base image
     /// \param layers number of layers. must be positive integer
     /// \param levels number of mipmap levels. set to 0 to automatically build full mipmap chain.
-    ///
-    ImageDesc(const ImagePlaneDesc & basemap, size_t layers = 1, size_t levels = 1, ConsructionOrder order = MIP_MAJOR) {
-        reset(basemap, (uint32_t) layers, (uint32_t) levels, order);
+    ImageDesc(const ImagePlaneDesc & baseMap, size_t layers = 1, size_t levels = 1, ConstructionOrder order = MIP_MAJOR) {
+        reset(baseMap, layers, levels, order);
     }
 
     // can copy.
@@ -907,6 +967,31 @@ struct ImageDesc {
         return *this;
     }
 
+    /// Reset to empty image
+    ImageDesc & clear() {
+        planes.clear();
+        layers = 0;
+        levels = 0;
+        size   = 0;
+        return *this;
+    }
+
+    /// reset the descriptor
+    ImageDesc & reset(const ImagePlaneDesc & baseMap, size_t layers, size_t levels, ConstructionOrder order);
+
+    /// @brief Set to simple 2D Image
+    /// @param format   Pixel format
+    /// @param width    Width of the image in pixels
+    /// @param height   Height of the image in pixels
+    /// @param levels   Mipmap count. Set to 0 to automatically generate full mipmap chain.
+    ImageDesc & set2D(ColorFormat format, size_t width, size_t height = 1, size_t levels = 1, ConstructionOrder order = MIP_MAJOR);
+
+    /// @brief Set to simple 2D Image
+    /// @param format   Pixel format
+    /// @param width    Width and height of the image in pixels
+    /// @param levels   Mipmap count. Set to 0 to automatically generate full mipmap chain.
+    ImageDesc & setCube(ColorFormat format, size_t width, size_t levels = 1, ConstructionOrder order = MIP_MAJOR);
+
     //@}
 
     // ****************************
@@ -921,7 +1006,7 @@ struct ImageDesc {
     bool empty() const { return planes.empty(); }
 
     ///
-    /// make sure this is a meaningfull image descriptor
+    /// make sure this is a meaningful image descriptor
     ///
     bool valid() const;
 
@@ -976,9 +1061,6 @@ private:
         PH_ASSERT(level < levels);
         return (level * layers) + layer;
     }
-
-    /// reset the descriptor
-    void reset(const ImagePlaneDesc & basemap, uint32_t layers, uint32_t levels, ConsructionOrder order);
 };
 
 /// Image descriptor combined with a pointer to pixel array. This is a convenient helper class for passing image
@@ -1089,6 +1171,9 @@ public:
     /// make a clone of the current image.
     RawImage clone() const { return RawImage(desc(), data()); }
 
+    /// Save certain plane to disk file.
+    void save(const std::string & filename, size_t layer, size_t level) const { desc().plane(layer, level).save(filename, proxy().pixel(layer, level)); }
+
     /// \name Image loading utilities
     //@{
     /// Helper method to load from a binary stream.
@@ -1149,9 +1234,7 @@ struct hash<ph::ImageDesc> {
         std::hash<ph::ImagePlaneDesc> planeHasher;
 
         // Calculate the hash of the planes.
-        for (const ph::ImagePlaneDesc & plane : key.planes) {
-            hash = 79 * hash + planeHasher(plane);
-        }
+        for (const ph::ImagePlaneDesc & plane : key.planes) { hash = 79 * hash + planeHasher(plane); }
 
         return hash;
     }

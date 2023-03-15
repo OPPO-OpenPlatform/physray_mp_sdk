@@ -1,65 +1,43 @@
-# Overview
+# Clone The Repository
 
-PhysRay SDK contains pre-built binaries for the following platform:
-  - Android : both 32-bit and 64-bit
+1. Before cloning, make sure you have GLT LFS (https://git-lfs.github.com/) installed on your dev system.
+
+2. Clone the repo with `git clone`. You might need to use `git lfs clone` if you are on a older version of GIT.
+
+## Troubleshooting
+- Permission denied while trying to connect to Docker daemon socket: Run the install-docker-engine.sh script. If that doesn't work, use the [fix described here](https://www.digitalocean.com/community/questions/how-to-fix-docker-got-permission-denied-while-trying-to-connect-to-the-docker-daemon-socket).
+- Building from docker fails due to missing C compiler: The docker image only has gcc and g++, so if you've set CC and CXX to use a different compiler in your environment variables, build will fail to find them inside the docker image. Use gcc and g++ instead.
+
+# Build Instruction
+
+PhysRay SDK can be built on the following environment:
   - Windows : 64-bit only.
-  - Linux   : 64-bit only
 
-Follow the instruction below to build SDK samples from source. 
+The build system is CMake based, with a few caveats:
 
-## Android build
-
-Once you have Android Studio and NDK installed, open [sample/android/hub](sample/android/hub) folder in Android Studio, then build as a regular Android app.
+- **Do NOT** install the Ubuntu's builtin Vulkan dev library `libvulkan-dev`.
+  If you already have it installed, run `sudo apt remove libvulkan1` to remove it.
+  Instead, you'll need to install the latest LunarG SDK from here: https://vulkan.lunarg.com/sdk/home
 
 ## Windows 10 Native Build
 
-Windows build the following dependency libraries that you have to install manually:
-- [Visualt Studio 2019+](https://visualstudio.microsoft.com/vs/)
+Windows build is currently done outside of Docker environment. You'll have to manually install the following dependency libraries:
+- [Visualt Studio 2022](https://visualstudio.microsoft.com/vs/)
   - Make sure you have "Desktop development with C++" and "Game development with C++" selected.
 - [Git For Windows](https://gitforwindows.org/) (We also need the bash environment coming with it.)
 - [Git LFS](https://git-lfs.github.com/)
 - [CMake](https://cmake.org/download/): [B]Make sure you install the x64 version of the cmake.[/B]
 - [Python 3.8+](https://www.python.org/downloads/windows/)
 - [LunarG SDK 1.2.182.1](https://vulkan.lunarg.com/sdk/home)
-- [Android Studio](https://developer.android.com/studio)
 
-You can run the following script to install them via winget:
+Other than visual studio, all of the dependencies can be installed via winget:
+
   ```
-  winget install --id Microsoft.VisualStudio.2022.Professional --silent --accept-package-agreements --accept-source-agreements --override "-q --add Microsoft.VisualStudio.Workload.ManagedDesktop;includeRecommended --add Microsoft.VisualStudio.Workload.NativeDesktop;includeRecommended --add Microsoft.VisualStudio.Workload.NativeGame;includeRecommended"
   winget install --id Kitware.CMake --silent --accept-package-agreements --accept-source-agreements
   winget install --id Git.Git --silent --accept-package-agreements --accept-source-agreements
   winget install --id KhronosGroup.VulkanSDK --version 1.2.182.0 --silent --accept-package-agreements --accept-source-agreements
-  winget install --id Python.Python.3 --silent --accept-package-agreements --accept-source-agreements
-  winget install --id Google.AndroidStudio --silent --accept-package-agreements --accept-source-agreements
+  winget install python --silent --accept-package-agreements --accept-source-agreements
   ```
 
-Once all dependencies are installed, run the [build-windows.cmd](build-windows.cmd) build all samples.
+Once all dependencies are installed, run the [build-win64.cmd] to build.
 
-## Linux build on Ubuntu 20.04
-
-For now, we only support Linux build on Ubuntu 20.04 LTS.
-
-- Run this script install all dependencies:
-  ```bash
-    # add vulkan sdk source
-    sudo apt-get update
-    sudo apt-get install -y wget gnupg2
-
-    echo "Downloading LunarG SDK and add to apt registry..."
-    sudo wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-    sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-1.2.182-focal.list https://packages.lunarg.com/vulkan/1.2.182/lunarg-vulkan-1.2.182-focal.list
-
-    # install build dependencies 
-    sudo apt-get update && sudo apt-get install -y \
-        build-essential \
-        cmake \
-        git \
-        git-lfs \
-        ninja-build \
-        vulkan-sdk \
-        libglfw3-dev \
-        libxinerama-dev \
-        libxcursor-dev \
-        libxi-dev
-  ```
-- Run [build-linux.sh](build-linux.sh) to build all samples.

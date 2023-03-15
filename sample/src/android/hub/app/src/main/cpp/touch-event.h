@@ -1,9 +1,28 @@
+/*****************************************************************************
+ * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
+ * License: No license is required for Oplus internal usage.
+ *          No external usage is allowed.
+ *
+ * File : touch-event.h
+ *
+ * Version: 2.0
+ *
+ * Date : Feb 2023
+ *
+ * Author: Computing & Graphics Research Institute
+ *
+ * ------------------ Revision History: ---------------------
+ *  <version>  <date>  <author>  <desc>
+ *
+ *******************************************************************************/
+
 #pragma once
 
 #include <ph/va.h> // this is to include the Eigne header included by va.h
 
 #include <algorithm>
 #include <sstream>
+#include <set>
 
 /// Represents one finger against the screen.
 class Touch {
@@ -38,7 +57,16 @@ private:
 /// Represents one or more fingers touching the screen.
 class TouchEvent {
 public:
-    TouchEvent(std::vector<Touch> && touches): _touches(std::move(touches)) {}
+    TouchEvent(const std::vector<Touch> & touches) {
+        // We sometimes see the same ID being reported multiple times in the event list. When that happens,
+        // only the first occurrence contains valid data.
+        std::set<int> idList;
+        _touches.reserve(touches.size());
+        for (const auto & t : touches) {
+            if (!idList.insert(t.id()).second) continue;
+            _touches.push_back(t);
+        }
+    }
 
     /// @return Distance in pixels between the 2 most distant pointers.
     /// Will return zero if there were fewer than 2 pointers.
@@ -80,9 +108,7 @@ public:
     float midpointX() const {
         // Add the cumulative coordinates.
         float sum = 0.0f;
-        for (const Touch & touch : _touches) {
-            sum += touch.position().x();
-        }
+        for (const Touch & touch : _touches) { sum += touch.position().x(); }
 
         // Calculate the average.
         return sum / ((float) _touches.size());
@@ -94,9 +120,7 @@ public:
     float midpointY() const {
         // Add the cumulative coordinates.
         float sum = 0.0f;
-        for (const Touch & touch : _touches) {
-            sum += touch.position().y();
-        }
+        for (const Touch & touch : _touches) { sum += touch.position().y(); }
 
         // Calculate the average.
         return sum / ((float) _touches.size());
@@ -114,9 +138,7 @@ public:
 
     /// Helper function to append to the end of a stream.
     friend inline std::ostream & operator<<(std::ostream & os, const TouchEvent & event) {
-        for (const auto & t : event._touches) {
-            os << "[" << t.id() << ", " << t.x() << ", " << t.y() << "] ";
-        }
+        for (const auto & t : event._touches) { os << "[" << t.id() << ", " << t.x() << ", " << t.y() << "] "; }
         return os;
     }
 

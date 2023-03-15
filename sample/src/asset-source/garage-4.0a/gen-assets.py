@@ -2,6 +2,8 @@
 
 import sys, os, pathlib, subprocess, shutil, json
 
+from PIL import Image
+
 # import utils.py from dev/script
 # import utils.py from dev/script
 self_dir=pathlib.Path(os.path.dirname(__file__)).absolute()
@@ -28,7 +30,8 @@ def convertToKTX2(source_path, mipmap = True, sRGB = True):
         "--astc_blk_d", "8x8",
         "--t2",
         "--target_type", "RGBA",
-        "--assign_oetf", "srgb" if sRGB else "linear"
+        "--assign_oetf", "srgb" if sRGB else "linear",
+        "--scale", str(scale)
     ]
     if mipmap: options += ["--genmipmap"]
     cmdline = [toktx] + options + [dest_path, source_path]
@@ -61,11 +64,22 @@ def convertGLTF(source_path):
     with open(dest_path, "w") as dest_file:
         json.dump(gltf, dest_file, indent=4)
 
+# Resize image and copy to destination folder
+def resize(source_path):
+    dest_path = dest_dir / source_path.name
+    utils.logi(f"Resize {source_path} -> {dest_path}")
+    s = Image.open(source_path)
+    d = s.resize((int(s.width * scale), int(s.height * scale)))
+    d.save(dest_path)
+
 # Function to copy file to dest folder as is.
 def copyToDestDir(source_path):
     dest_path = dest_dir / source_path.name
     utils.logi(f"Copy: {source_path} -> {dest_path}")
     shutil.copyfile(source_path, dest_path)
+
+# define conversion parameters
+scale = 1.0 / 4.0 
 
 # grab file list
 for source in os.listdir(self_dir):
@@ -86,10 +100,13 @@ for source in os.listdir(self_dir):
         elif "normal" in source_stem:
             convertToKTX2(source_path, mipmap=False, sRGB = False) # do _NOT_ generate mipmap for normal map
             continue
+        else:
+            resize(source_path)
+            continue
 
     if ".gltf" == source_ext:
         convertGLTF(source_path)
         continue
 
-    # For everthing else, just copy to dest folder
+    # For everything else, just copy to dest folder
     copyToDestDir(source_path)

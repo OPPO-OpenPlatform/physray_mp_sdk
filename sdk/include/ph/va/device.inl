@@ -2,7 +2,8 @@
 
 #include <set>
 
-namespace ph::va {
+namespace ph {
+namespace va {
 
 /// Extensible structure chain used by Vulkan API.
 struct StructureChain {
@@ -15,6 +16,12 @@ struct StructureChain {
         buffer.resize(sizeof(feature));
         memcpy(buffer.data(), &feature, sizeof(feature));
     }
+
+    template<typename T>
+    T * reset() {
+        buffer.resize(sizeof(T));
+        return (T *) buffer.data();
+    }
 };
 
 class SimpleVulkanInstance {
@@ -25,10 +32,11 @@ public:
         LOG_ON_VK_ERROR,
         LOG_ON_VK_ERROR_WITH_CALL_STACK,
         THROW_ON_VK_ERROR,
+        BREAK_ON_VK_ERROR,
     };
 
     enum Verbosity {
-        SILIENCE = 0,
+        SILENCE = 0,
         BRIEF,
         VERBOSE,
     };
@@ -37,21 +45,21 @@ public:
         /// The Vulkan API version. Default is 1.1
         uint32_t apiVersion = VK_MAKE_VERSION(1, 1, 0);
 
-        /// Specify extra layers to initialize VK instance. The 2nd valud indicates if the layer is required or not.
+        /// Specify extra layers to initialize VK instance. The 2nd value indicates if the layer is required or not.
         /// We have to use vector instead of map here, because layer loading order matters.
         std::vector<std::pair<std::string, bool>> layers;
 
-        /// Specify extra extension to initialize VK instance. Value indicdate if the extension is required or not.
+        /// Specify extra extension to initialize VK instance. Value indicate if the extension is required or not.
         std::map<std::string, bool> instanceExtensions;
 
         /// structure chain passed to VkInstanceCreateInfo::pNext
         std::vector<StructureChain> instanceCreateInfo;
 
         /// Set to true to enable validation layer.
-        Validation validation = PH_BUILD_DEBUG ? LOG_ON_VK_ERROR : VALIDATION_DISABLED;
+        Validation validation = PH_BUILD_DEBUG ? LOG_ON_VK_ERROR_WITH_CALL_STACK : VALIDATION_DISABLED;
 
         /// Creation log output verbosity
-        Verbosity printVkInfo = PH_BUILD_DEBUG ? VERBOSE : BRIEF;
+        Verbosity printVkInfo = BRIEF;
     };
 
     SimpleVulkanInstance(ConstructParameters);
@@ -78,14 +86,14 @@ public:
         /// pointer to Vulkan instance.
         SimpleVulkanInstance * instance = nullptr;
 
-        /// Specify extra extension to initialize VK device. Value indicdate if the extension is required or not.
+        /// Specify extra extension to initialize VK device. Value indicate if the extension is required or not.
         std::map<std::string, bool> deviceExtensions;
 
         /// Set to true to defer to VMA for device memory allocations.
         bool useVmaAllocator = false;
 
         /// set to false to make the creation log less verbose.
-        SimpleVulkanInstance::Verbosity printVkInfo = PH_BUILD_DEBUG ? SimpleVulkanInstance::VERBOSE : SimpleVulkanInstance::BRIEF;
+        SimpleVulkanInstance::Verbosity printVkInfo = SimpleVulkanInstance::BRIEF;
 
         /// Basic VK device feature list defined by Vulkan 1.0
         VkPhysicalDeviceFeatures features1 {};
@@ -144,11 +152,12 @@ template<bool ENABLED = true>
 class MuteValidationErrorWithinCurrentScope {
 public:
     MuteValidationErrorWithinCurrentScope() {
-        if constexpr (ENABLED) muteValidationErrorLog();
+        if (ENABLED) muteValidationErrorLog();
     }
     ~MuteValidationErrorWithinCurrentScope() {
-        if constexpr (ENABLED) unmuteValidationErrorLog();
+        if (ENABLED) unmuteValidationErrorLog();
     }
 };
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph

@@ -4,7 +4,8 @@
 #include <sstream>
 #include <algorithm>
 
-namespace ph::va {
+namespace ph {
+namespace va {
 // ---------------------------------------------------------------------------------------------------------------------
 /// Utility function to enumerate vulkan item/feature/extension list.
 template<typename T, typename Q>
@@ -64,4 +65,5 @@ inline std::string printVulkanVersion(uint32_t v) {
     return ss.str();
 };
 
-} // namespace ph::va
+} // namespace va
+} // namespace ph
