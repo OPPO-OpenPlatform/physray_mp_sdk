@@ -1,19 +1,5 @@
 /*****************************************************************************
- * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
- * License: No license is required for Oplus internal usage.
- *          No external usage is allowed.
- *
- * File : fatmesh.h
- *
- * Version: 2.0
- *
- * Date : Feb 2023
- *
- * Author: Computing & Graphics Research Institute
- *
- * ------------------ Revision History: ---------------------
- *  <version>  <date>  <author>  <desc>
- *
+ * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
  *******************************************************************************/
 
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.

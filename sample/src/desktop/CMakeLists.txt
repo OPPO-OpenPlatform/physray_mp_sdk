@@ -1,19 +1,5 @@
 #############################################################################
-# Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
-# License: No license is required for Oplus internal usage.
-#          No external usage is allowed.
-#
-# File : CMakeLists.txt
-#
-# Version: 2.0
-#
-# Date : Feb 2023
-#
-# Author: Computing & Graphics Research Institute
-#
-# ------------------ Revision History: ---------------------
-#  <version>  <date>  <author>  <desc>
-#
+# Copyright (C) 2020 - 2023 OPPO. All rights reserved.
 ###############################################################################
 
 # ======================================================================================================================
@@ -49,11 +35,7 @@ add_sample_app(empty ../rt/empty_app/main.cpp ../rt/empty_app/empty_app.h)
 add_sample_app(triangle ../rt/triangle/main.cpp ../rt/triangle/triangle.h)
 add_sample_app(blue_triangle ../rt/blue_triangle/main.cpp ../rt/blue_triangle/blue_triangle.h)
 
-# Copy the physray-rt-shared.dll file to build folder
-file(COPY ../../../sdk/win64.Debug/bin/physray-rt-shared.dll DESTINATION Debug)
-
 # RPS samples
 add_sample_app(rps-hello ../rps/hello/hello.cpp ../rps/hello/hello.h)
 add_sample_app(rps-triangle ../rps/triangle/triangle.cpp ../rps/triangle/triangle.h)
 add_sample_app(rps-texture ../rps/texture/texture.cpp ../rps/texture/texture.h)
-

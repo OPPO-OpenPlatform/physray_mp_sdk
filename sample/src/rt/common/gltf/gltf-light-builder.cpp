@@ -1,24 +1,7 @@
 /*****************************************************************************
- * Copyright (C), 2023,  Computing & Graphics Research Institute of OPLUS Mobile Comm Corp., Ltd
- * License: No license is required for Oplus internal usage.
- *          No external usage is allowed.
- *
- * File : gltf-light-builder.cpp
- *
- * Version: 2.0
- *
- * Date : Feb 2023
- *
- * Author: Computing & Graphics Research Institute
- *
- * ------------------ Revision History: ---------------------
- *  <version>  <date>  <author>  <desc>
- *
+ * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
  *******************************************************************************/
 
-/**
- *
- */
 #include "pch.h"
 #include "gltf-light-builder.h"
 
@@ -113,7 +96,7 @@ ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::N
 }
 
 ph::rt::Float3 GLTFLightBuilder::getEmissive(const tinygltf::Light & light) {
-    ph::rt::Float3 emissive = {};
+    ph::rt::Float3 emissive;
 
     // Fill in the selected colors.
     for (std::size_t index = 0; index < light.color.size(); ++index) { emissive[index] = (float) light.color[index]; }
