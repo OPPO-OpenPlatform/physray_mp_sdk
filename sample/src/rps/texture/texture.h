@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -65,7 +65,7 @@ public:
 
         // Begin the main render pass
         auto rt0 = rps::Pass::RenderTarget {bb}.setClearColorF(.25f, .5f, .75f, 1.f);
-        if (_scene->mainPass->cmdBegin(_recorder, {.targets = {rt0}})) {
+        if (_scene->mainPass->cmdBegin(_recorder, {.targets = {&rt0, 1}})) {
             // draw quad #1
             auto args     = std::array<rps::Program::ArgumentSetBinding, 1> {{0, _scene->arguments}};
             auto vertices = std::array<rps::Buffer::View, 1> {{_scene->vertexBuffer1}};

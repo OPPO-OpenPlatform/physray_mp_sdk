@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -95,7 +98,7 @@ public:
      * @param node The tinygltf node being read from.
      * @param nodeTransform The PhysRay transform being written to.
      */
-    static void toNodeTransform(const tinygltf::Node * node, ph::rt::NodeTransform & nodeTransform);
+    static void toNodeTransform(const tinygltf::Node * node, sg::Transform & nodeTransform);
 
 private:
     /**

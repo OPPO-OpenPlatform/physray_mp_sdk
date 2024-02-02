@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -40,7 +43,7 @@ public:
      * by decomposing its transform.
      * @param target The node this channel will animate.
      */
-    RootTransformChannel(ph::rt::Node * root, ph::rt::Node * target);
+    RootTransformChannel(sg::Node * root, sg::Node * target);
 
     /**
      * @param root The node target's transform will be relative to.
@@ -51,7 +54,7 @@ public:
      * @param rotation Starting rotation.
      * @param scale Starting scale.
      */
-    RootTransformChannel(ph::rt::Node * root, ph::rt::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation,
+    RootTransformChannel(sg::Node * root, sg::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation,
                          const Eigen::Vector3f & scale);
 
     /**
@@ -63,7 +66,7 @@ public:
      * @return The node who's world transform is
      * being updated by the animation.
      */
-    ph::rt::Node * getRoot() { return _root; }
+    sg::Node * getRoot() { return _root; }
 
     /**
      * This will simply set the target to the current values of the transform.
@@ -74,7 +77,7 @@ private:
     /**
      * The node target's transform will be relative to.
      */
-    ph::rt::Node * _root;
+    sg::Node * _root;
 };
 
 } // namespace animations

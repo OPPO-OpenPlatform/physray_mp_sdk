@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "physray-type-converter.h"
 
@@ -78,7 +81,7 @@ bool JediTypeConverter::toMatrix(const std::vector<double> & list, std::size_t o
 
 bool JediTypeConverter::toMatrix(const std::vector<double> & list, Eigen::Matrix4f & matrix) { return toMatrix(list, 0, matrix); }
 
-void JediTypeConverter::toNodeTransform(const tinygltf::Node * node, ph::rt::NodeTransform & nodeTransform) {
+void JediTypeConverter::toNodeTransform(const tinygltf::Node * node, sg::Transform & nodeTransform) {
 
     // If the matrix is defined.
     if (node->matrix.size() >= 16) {
@@ -93,7 +96,7 @@ void JediTypeConverter::toNodeTransform(const tinygltf::Node * node, ph::rt::Nod
         // combination of the translation, rotation, and scale.
     } else {
         // Make sure the transform is initialized to identity.
-        nodeTransform = ph::rt::NodeTransform::Identity();
+        nodeTransform = sg::Transform::Identity();
 
         // Combine everything into the transform by order of translate, rotate, scale.
         // Grab the translation.

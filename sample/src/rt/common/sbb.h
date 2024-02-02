@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -54,14 +54,14 @@ public:
 
         // copy data from scratch buffer to permanent buffer
         ph::va::SingleUseCommandPool pool(_vsp);
-        pool.syncexec([&](auto cb) {
+        pool.syncExec([&](auto cb) {
             auto region      = VkBufferCopy {};
             region.srcOffset = 0;
             region.dstOffset = 0;
             region.size      = size;
             vkCmdCopyBuffer(cb, scratch.buffer, permanent.buffer, 1, &region);
         });
-        PH_LOGI("Upload %s to GPU buffer: handle=0x%llu", name, permanent.buffer);
+        PH_LOGI("Upload %s to GPU buffer: handle=0x%" PRIx64 "", name, (uint64_t) permanent.buffer);
         return &permanent;
     }
 };

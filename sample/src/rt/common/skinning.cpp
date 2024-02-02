@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -95,12 +95,12 @@ bool SkinnedMeshManager::allocateBuffers(ph::va::VulkanSubmissionProxy & vsp, co
 
     // Allocate joint matrices buffer
     std::vector<mat4> joints;
-    for (size_t i = 0; i < skinData.jointMatrices.size(); i++) { joints.emplace_back(ph::rt::toEigen(skinData.jointMatrices[i]->worldTransform())); }
+    for (size_t i = 0; i < skinData.jointMatrices.size(); i++) { joints.emplace_back(skinData.jointMatrices[i]->worldTransform().matrix4f()); }
     skinBuffer.jointsBuffer.allocate(vgi, joints.size());
 
     // Sync the buffers to the gpu
     ph::va::SingleUseCommandPool pool(vsp);
-    pool.syncexec([&](auto cb) {
+    pool.syncExec([&](auto cb) {
         skinBuffer.inputVertexBuffer.sync2gpu(cb);
         skinBuffer.outputVertexBuffer.sync2gpu(cb);
         skinBuffer.weightsBuffer.sync2gpu(cb);
@@ -154,7 +154,7 @@ bool SkinnedMeshManager::checkForSkeletonChanges(SkinningData & skinnedMesh) {
     for (size_t i = 0; i < skinnedMesh.jointMatrices.size(); i++) {
         const auto & nt   = skinnedMesh.jointMatrices[i]->worldTransform();
         const auto & prev = skinnedMesh.prevJointMatrices[i];
-        if (!result && nt != (ph::rt::Float3x4) prev) result = true;
+        if (!result && nt != prev) result = true;
         skinnedMesh.prevJointMatrices[i] = nt;
     }
     return result;
@@ -189,8 +189,8 @@ void SkinnedMeshManager::initPrevSkinMatrices() {
     for (auto & [mesh, submeshes] : _skinnedMeshes) {
         for (auto & skinnedMesh : submeshes) {
             for (size_t i = 0; i < skinnedMesh.jointMatrices.size(); i++) {
-                NodeTransform nt = skinnedMesh.jointMatrices[i]->worldTransform();
-                NodeTransform ntCopy(nt);
+                sg::Transform nt = skinnedMesh.jointMatrices[i]->worldTransform();
+                sg::Transform ntCopy(nt);
                 skinnedMesh.prevJointMatrices.emplace_back(ntCopy);
             }
         }
@@ -220,7 +220,7 @@ void SkinnedMeshManager::updateJointMatrixBuffer(DeferredHostOperation & dho, Vk
     for (size_t i = 0; i < jointMatrices.size(); ++i) {
         auto & m = jointMatrices[i];
         auto & n = skinData.jointMatrices[i];
-        m        = ph::rt::toEigen(n->worldTransform());
+        m        = Eigen::Affine3f(n->worldTransform()).matrix();
     }
     dho.cmdUploadToGpu(cb, skinBuffer.jointsBuffer.g.buffer, 0, jointMatrices);
 }

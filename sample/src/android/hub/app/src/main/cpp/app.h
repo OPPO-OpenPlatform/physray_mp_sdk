@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -16,6 +16,7 @@
 #include "rt/empty_app/empty_app.h"
 #include "rt/triangle/triangle.h"
 #include "rt/blue_triangle/blue_triangle.h"
+#include "rt/refl/refl.h"
 
 #include "drag-motion-controller.h"
 #include "touch-event.h"
@@ -102,6 +103,8 @@ public:
                                return createScene<TriangleScene>(app);
                            } else if (_cp.name == "Blue-tri") {
                                return createScene<BlueTriangleScene>(app);
+                           } else if (_cp.name == "Refl") {
+                               return createScene<ReflScene>(app);
                            } else {
                                PH_LOGE("Unrecognized demo name: %s.", _cp.name.c_str());
                                return (SimpleScene *) nullptr;
@@ -199,7 +202,7 @@ private:
     SimpleScene * createScene(SimpleApp & app, std::function<void(typename Scene::Options &)> func = {}) {
         auto &                  sw = app.sw();
         typename Scene::Options o;
-        if (_cp.rasterized) o.rpmode = World::RayTracingRenderPackCreateParameters::Mode::RASTERIZED;
+        if (_cp.rasterized) o.rpmode = Scene::Options::RenderPackMode::RAST;
         o.animated = _cp.animated;
         if (func) func(o);
         return new Scene(app, o);

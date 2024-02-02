@@ -1,10 +1,13 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // this file is part of base.h. Do not include it direclty in your own header. Always include base.h.
 
 #include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
-#include <errno.h>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -13,6 +16,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <inttypes.h> // for PRId64, PRIu64, etc.
+#include <errno.h>
 
 // Disable some known "harmless" warnings. So we can use /W4 throughout our code base.
 #ifdef _MSC_VER
@@ -115,11 +120,13 @@
 /// 'persist.physray-sdk.log.level'.
 ///
 //@{
-#define PH_LOG(tag__, severity, ...)                                                                                                              \
-    [&]() -> void {                                                                                                                               \
-        using namespace ph::log::macros;                                                                                                          \
-        auto ctrl__ = ph::log::Controller::getInstance(tag__);                                                                                    \
-        if (ctrl__->enabled(severity)) { ph::log::Helper(ctrl__->tag().c_str(), __FILE__, __LINE__, __FUNCTION__, (int) severity)(__VA_ARGS__); } \
+#define PH_LOG(tag__, severity, ...)                                                                                                           \
+    [&]() -> void {                                                                                                                            \
+        using namespace ph::log::macros;                                                                                                       \
+        auto ctrl__ = ph::log::Controller::getInstance(tag__);                                                                                 \
+        if (ctrl__->enabled(severity)) {                                                                                                       \
+            ph::log::Helper(ctrl__->tag().c_str(), __FILE__, __LINE__, __FUNCTION__, (int) severity)(ph::log::Helper::formatLog(__VA_ARGS__)); \
+        }                                                                                                                                      \
     }()
 #define PH_LOGE(...) PH_LOG(, E, __VA_ARGS__)
 #define PH_LOGW(...) PH_LOG(, W, __VA_ARGS__)
@@ -160,7 +167,7 @@
 #define PH_REQUIRE2(x, ...) PH_CHK(x, PH_THROW(__VA_ARGS__))
 
 /// Check for required conditions. Throw runtime error exception when the condition is not met.
-#define PH_REQUIRE(x) PH_REQUIRE2(x, #x)
+#define PH_REQUIRE(x) PH_REQUIRE2(x, "%s", #x)
 
 /// Runtime assertion for debug build. The assertion failure triggers debug-break signal in debug build.
 /// It is no-op in profile and release build, thus can be used in performance critical code path.
@@ -314,10 +321,7 @@ inline LogStream s(const char * str = nullptr) {
 }; // namespace macros
 
 class PH_API Helper {
-
     LogDesc _desc;
-
-    const char * formatlog(const char *, ...);
 
     void post(const char *);
 
@@ -325,47 +329,42 @@ public:
     template<class... Args>
     Helper(Args &&... args): _desc {args...} {}
 
-    template<class... Args>
-    void operator()(const char * format, Args &&... args) {
-        post(formatlog(format, std::forward<Args>(args)...));
-    }
-
-    template<class... Args>
-    void operator()(const std::string & format, Args &&... args) {
-        post(formatlog(format.c_str(), std::forward<Args>(args)...));
-    }
-
-    template<class... Args>
-    void operator()(const std::stringstream & format, Args &&... args) {
-        post(formatlog(format.str().c_str(), std::forward<Args>(args)...));
-    }
-
-    void operator()(const macros::LogStream & s) { post(formatlog(s.ss.str().c_str())); }
-
-    template<class... Args>
-    void operator()(Controller * c, const char * format, Args &&... args) {
-        if (Controller::getInstance(c)->enabled(_desc.severity)) {
-            _desc.tag = c->tag().c_str();
-            operator()(format, std::forward<Args>(args)...);
+    template<class T>
+    void operator()(T && t) {
+        if constexpr (std::is_same_v<T, std::vector<char>>) {
+            post(t.data());
+        } else {
+            post(t.c_str());
         }
     }
 
-    template<class... Args>
-    void operator()(Controller * c, const std::string & format, Args &&... args) {
-        operator()(c, format.c_str(), std::forward<Args>(args)...);
-    }
+#ifdef __clang__
+    __attribute__((format(printf, 1, 2)))
+#endif
+    static std::vector<char>
+                                      formatLog(const char *, ...);
+    static inline const std::string & formatLog(const std::string & s) { return s; }
+    static inline std::string         formatLog(const std::stringstream & s) { return s.str(); }
+    static inline std::string         formatLog(const macros::LogStream & s) { return s.ss.str(); }
 
-    template<class... Args>
-    void operator()(Controller * c, const std::stringstream & format, Args &&... args) {
-        operator()(c, format.str().c_str(), std::forward<Args>(args)...);
-    }
+    // template<class... Args>
+    // void operator()(Controller * c, const std::string & message) {
+    //     if (Controller::getInstance(c)->enabled(_desc.severity)) {
+    //         _desc.tag = c->tag().c_str();
+    //         operator()(format, std::forward<Args>(args)...);
+    //     }
+    // }
 
-    void operator()(Controller * c, const macros::LogStream & s) {
-        if (Controller::getInstance(c)->enabled(_desc.severity)) {
-            _desc.tag = c->tag().c_str();
-            operator()(s);
-        }
-    }
+    // void operator()(Controller * c, const std::string & s) { operator()(c, "%s", s.c_str()); }
+
+    // void operator()(Controller * c, const std::stringstream & s) { operator()(c, "%s", s.str().c_str()); }
+
+    // void operator()(Controller * c, const macros::LogStream & s) {
+    //     if (Controller::getInstance(c)->enabled(_desc.severity)) {
+    //         _desc.tag = c->tag().c_str();
+    //         operator()(s);
+    //     }
+    // }
 };
 
 } // namespace log
@@ -405,7 +404,7 @@ PH_API std::string backtrace(bool includeSourceSnippet = PH_BUILD_DEBUG);
 /// Currently only implemented on Linux.
 PH_API void registerSignalHandlers();
 
-/// allocated aligned memory. The returned pointer must be freed by
+/// allocated aligned memory. The returned pointer must be freed by afree()
 PH_API void * aalloc(size_t alignment, size_t bytes);
 
 /// free memory allocated by aalloc()
@@ -414,12 +413,17 @@ PH_API void afree(void *);
 /// delete and clear an object pointer.
 template<typename T>
 void safeDelete(T *& p) {
-    if (p) delete p, p = nullptr;
+    delete p; // no need to check for nullptr as delete is safe.
+    p = nullptr;
 }
 
 /// Return's pointer to the internal storage. The content will be overwritten
 /// by the next call on the same thread.
-PH_API const char * formatstr(const char * format, ...);
+#ifdef __clang__
+__attribute__((format(printf, 1, 2)))
+#endif
+PH_API const char *
+formatstr(const char * format, ...);
 
 /// convert duration in nanoseconds to string
 PH_API std::string ns2str(uint64_t ns, int width = 6, int precision = 2);
@@ -429,7 +433,7 @@ inline std::string duration2str(const std::chrono::high_resolution_clock::durati
     return ns2str(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count(), width, precision);
 }
 
-/// Different compiler has slightly different way to query environoment (getenv_s vs. getenv). Thus
+/// Different compiler has slightly different way to query environment (getenv_s vs. getenv). Thus
 /// this method to unify the difference.
 PH_API std::string getEnvString(const char * name);
 
@@ -868,14 +872,7 @@ public:
 
     constexpr ConstRange(const std::vector<T> & v): _ptr(v.data()), _size((SIZE_T) v.size()) {}
 
-#if defined(__GNUC__) && !defined(__clang__)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Winit-list-lifetime"
-#endif
-    constexpr ConstRange(const std::initializer_list<T> & v): _ptr(v.begin()), _size((SIZE_T) v.size()) {}
-#if defined(__GNUC__) && !defined(__clang__)
-    #pragma GCC diagnostic pop
-#endif
+    // constexpr ConstRange(const std::initializer_list<T> & v): _ptr(v.begin()), _size((SIZE_T) v.size()) {}
 
     template<SIZE_T N>
     constexpr ConstRange(const T (&array)[N]): _ptr(array), _size(N) {}

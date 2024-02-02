@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-transform-channel-builder.h"
 #include "../physray-type-converter.h"
@@ -169,7 +172,7 @@ void GLTFTransformChannelBuilder::buildVector3fKeyValues(
         // If this is anything else.
     } else {
         // Warn user that interpolation type is not supported.
-        PH_LOGW("Interpolation type '%s' not supported.");
+        PH_LOGW("Interpolation type '%s' not supported.", _animationSampler->interpolation.c_str());
     }
 }
 
@@ -208,7 +211,7 @@ void GLTFTransformChannelBuilder::buildQuaternionfKeyValues(
         // If this is anything else.
     } else {
         // Warn user that interpolation type is not supported.
-        PH_LOGW("Interpolation type '%s' not supported.");
+        PH_LOGW("Interpolation type '%s' not supported.", _animationSampler->interpolation.c_str());
     }
 }
 

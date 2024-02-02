@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -47,8 +47,8 @@ struct BlueTriangleScene : ModelViewer {
         auto mesh     = createNonIndexedMesh(vertices.size() / 3, vertices.data(), normals.data(), nullptr, tangents.data());
         mesh->name    = "triangle";
         auto baseDesc = []() { return rt::Material::Desc {}; };
-        auto blue     = scene->create("blue", baseDesc().setAlbedo(0.f, 0.f, 1.f));
-        addMeshNode(nullptr, ph::rt::NodeTransform::Identity(), mesh, blue);
+        auto blue     = world->create("blue", baseDesc().setAlbedo(0.f, 0.f, 1.f));
+        addMeshNode(nullptr, sg::Transform::Identity(), mesh, blue);
 
         const float         bmax[3] = {r, h, z};
         Eigen::AlignedBox3f bbox;
@@ -63,22 +63,22 @@ struct BlueTriangleScene : ModelViewer {
         setupShadowRenderPack();
 
         // add light
-        ph::rt::NodeTransform lightTransform = ph::rt::NodeTransform::Identity();
-        Eigen::Vector3f       _lightPosition;
+        sg::Transform   lightTransform = sg::Transform::Identity();
+        Eigen::Vector3f _lightPosition;
         _lightPosition.x() = _floorCenter.x() - 10.0f;
         _lightPosition.y() = 20.0f;
         _lightPosition.z() = 20.0f;
         lightTransform.translate(_lightPosition);
 
-        ph::rt::Node * _lightNode;
-        _lightNode = this->scene->createNode({});
+        sg::Node * _lightNode;
+        _lightNode = this->graph->createNode({});
         _lightNode->setTransform(lightTransform);
 
-        ph::rt::Light * _light = this->scene->createLight({});
+        ph::rt::Light * _light = this->world->createLight({});
         _lightNode->attachComponent(_light);
 
         ph::rt::Material::TextureHandle _shadowMapCube = textureCache->createShadowMapCube("point");
-        lights.push_back(_light);
+        lights.push_back(_lightNode);
 
         auto desc         = _light->desc();
         desc.type         = ph::rt::Light::Type::POINT;

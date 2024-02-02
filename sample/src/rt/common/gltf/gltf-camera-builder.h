@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -32,12 +35,12 @@ public:
      * @return a newly created light matching the given tinygtlf light.
      * Returns a null pointer if light type isn't supported.
      */
-    Camera build(const tinygltf::Camera & camera, ph::rt::Node * node);
+    Camera build(const tinygltf::Camera & camera, sg::Node * node);
 
 private:
-    Camera buildPerspective(const tinygltf::Camera & camera, ph::rt::Node * node);
+    Camera buildPerspective(const tinygltf::Camera & camera, sg::Node * node);
 
-    Camera buildOrthographic(const tinygltf::Camera & camera, ph::rt::Node * node);
+    Camera buildOrthographic(const tinygltf::Camera & camera, sg::Node * node);
 };
 
 } // namespace gltf

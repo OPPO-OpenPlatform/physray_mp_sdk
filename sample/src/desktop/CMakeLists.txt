@@ -1,5 +1,5 @@
 #############################################################################
-# Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+# Copyright (C) 2020 - 2024 OPPO. All rights reserved.
 ###############################################################################
 
 # ======================================================================================================================
@@ -34,8 +34,13 @@ add_sample_app(carousel ../rt/carousel/main.cpp ../rt/carousel/carousel.h)
 add_sample_app(empty ../rt/empty_app/main.cpp ../rt/empty_app/empty_app.h)
 add_sample_app(triangle ../rt/triangle/main.cpp ../rt/triangle/triangle.h)
 add_sample_app(blue_triangle ../rt/blue_triangle/main.cpp ../rt/blue_triangle/blue_triangle.h)
+add_sample_app(refl ../rt/refl/main.cpp ../rt/refl/refl.h)
 
 # RPS samples
 add_sample_app(rps-hello ../rps/hello/hello.cpp ../rps/hello/hello.h)
-add_sample_app(rps-triangle ../rps/triangle/triangle.cpp ../rps/triangle/triangle.h)
+add_sample_app(rps-triangle1 ../rps/triangle/triangle1.cpp ../rps/triangle/triangle1.h)
+add_sample_app(rps-triangle2 ../rps/triangle/triangle2.cpp ../rps/triangle/triangle2.h)
+add_sample_app(rps-triangle3 ../rps/triangle/triangle3.cpp ../rps/triangle/triangle3.h)
+add_sample_app(rps-triangle4 ../rps/triangle/triangle4.cpp ../rps/triangle/triangle4.h)
 add_sample_app(rps-texture ../rps/texture/texture.cpp ../rps/texture/texture.h)
+add_sample_app(rps-compute ../rps/compute/compute.cpp ../rps/compute/compute.h)

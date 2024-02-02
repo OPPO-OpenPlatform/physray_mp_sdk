@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 #pragma once
 
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
@@ -132,24 +136,6 @@ inline VkCommandBufferAllocateInfo commandBufferAllocateInfo(VkCommandPool cmdPo
     commandBufferAllocateInfo.level              = level;
     commandBufferAllocateInfo.commandBufferCount = count;
     return commandBufferAllocateInfo;
-}
-
-inline VkViewport viewport(float width, float height, float minDepth, float maxDepth) {
-    VkViewport viewport {};
-    viewport.width    = width;
-    viewport.height   = height;
-    viewport.minDepth = minDepth;
-    viewport.maxDepth = maxDepth;
-    return viewport;
-}
-
-inline VkRect2D rect2d(int32_t width, int32_t height, int32_t offsetX, int32_t offsetY) {
-    VkRect2D rect2D {};
-    rect2D.extent.width  = width;
-    rect2D.extent.height = height;
-    rect2D.offset.x      = offsetX;
-    rect2D.offset.y      = offsetY;
-    return rect2D;
 }
 
 inline VkSubmitInfo submitInfo() {

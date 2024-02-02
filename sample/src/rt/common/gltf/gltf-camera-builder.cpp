@@ -1,14 +1,17 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-camera-builder.h"
 #include "../camera.h"
 
 namespace gltf {
 
-Camera GLTFCameraBuilder::build(const tinygltf::Camera & camera, ph::rt::Node * node) {
+Camera GLTFCameraBuilder::build(const tinygltf::Camera & camera, sg::Node * node) {
     // Give the camera its properties according to the camera's type.
     // If this is an perspective camera.
     if (camera.type == "perspective") {
@@ -32,7 +35,7 @@ Camera GLTFCameraBuilder::build(const tinygltf::Camera & camera, ph::rt::Node * 
     }
 }
 
-Camera GLTFCameraBuilder::buildPerspective(const tinygltf::Camera & camera, ph::rt::Node * node) {
+Camera GLTFCameraBuilder::buildPerspective(const tinygltf::Camera & camera, sg::Node * node) {
     // Fetch the perspective properties.
     const tinygltf::PerspectiveCamera & perspectiveCamera = camera.perspective;
 
@@ -45,7 +48,7 @@ Camera GLTFCameraBuilder::buildPerspective(const tinygltf::Camera & camera, ph::
     return phCamera;
 }
 
-Camera GLTFCameraBuilder::buildOrthographic(const tinygltf::Camera & camera, ph::rt::Node * node) {
+Camera GLTFCameraBuilder::buildOrthographic(const tinygltf::Camera & camera, sg::Node * node) {
     // Fetch the perspective properties.
     const tinygltf::OrthographicCamera & orthographicCamera = camera.orthographic;
 

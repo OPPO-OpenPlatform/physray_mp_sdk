@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 // This is the main header of PhysRay SDK Base module.
@@ -20,6 +20,8 @@ namespace ph {}
 #include "base/base.inl"
 #include "base/color.inl"
 #include "base/asset.inl"
+#include "base/array-view.inl"
+#include "base/guid.inl"
 
 // Include a modified copy of palacaze/sigslot library. all classes is moved into ph namespace
 // to avoid naming conflicting.

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -27,27 +27,7 @@ using namespace ph::rt;
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-struct RtCommandQueueProxy : ph::rt::CommandQueueProxy {
-    ph::va::VulkanSubmissionProxy & sp;
-    RtCommandQueueProxy(ph::va::VulkanSubmissionProxy & sp_): sp(sp_) {}
-
-    uint32_t queueFamilyIndex() const override { return sp.queueFamilyIndex(); }
-
-    VkResult submit(const ph::rt::BlobProxy<SubmitInfo> & range, VkFence signalFence = VK_NULL_HANDLE) override {
-        static_assert(sizeof(SubmitInfo) == sizeof(ph::va::VulkanSubmissionProxy::SubmitInfo), "");
-        static_assert(sizeof(range) == sizeof(ph::ConstRange<ph::va::VulkanSubmissionProxy::SubmitInfo>), "");
-        return sp.submit((const ph::ConstRange<ph::va::VulkanSubmissionProxy::SubmitInfo> &) range, signalFence);
-    }
-
-    // wait for the queue to be completely idle (including both CPU and GPU)
-    VkResult waitIdle() override { return sp.waitIdle(); }
-};
-
-// ---------------------------------------------------------------------------------------------------------------------
-//
-ModelViewer::ModelViewer(SimpleApp & app, const Options & o)
-    : SimpleScene(app), options(o), skinningManager(app.dev().vgi()), ptConfig(ph::rt::World::RayTracingRenderPackCreateParameters::isStochastic(o.rpmode)),
-      sbb(app.dev()) {
+ModelViewer::ModelViewer(SimpleApp & app, const Options & o): SimpleScene(app), options(o), skinningManager(app.dev().vgi()), sbb(app.dev()) {
 
     // create main color pass
     recreateColorRenderPass();
@@ -57,6 +37,7 @@ ModelViewer::ModelViewer(SimpleApp & app, const Options & o)
         {
             ASSET_FOLDER,
             getExecutableFolder() + "/asset",
+            SRC_ASSET_FOLDER,
         },
         1024,
     };
@@ -66,21 +47,12 @@ ModelViewer::ModelViewer(SimpleApp & app, const Options & o)
     // Initialize texture cache so that images can be reused.
     textureCache.reset(new TextureCache(&dev().graphicsQ(), assetSys, shadowMapFormat, shadowMapSize));
 
-    cmdProxy = new RtCommandQueueProxy(dev().graphicsQ());
-
     // create RT world instance
-    const auto & vgi = dev().vgi();
-    auto         wcp = World::WorldCreateParameters {vgi.allocator,
-                                             vgi.instance,
-                                             vgi.phydev,
-                                             vgi.device,
-                                             vgi.vmaAllocator,
-                                             cmdProxy,
-                                             std::vector<ph::rt::StrA> {ph::rt::StrA(ASSET_FOLDER)},
+    auto wcp = World::WorldCreateParameters {&dev().graphicsQ(), std::vector<std::string> {std::string(ASSET_FOLDER)},
                                              nullptr, // &cpuFrameTimes,
                                              true,    // GPU timestamps.
                                              app.cp().rayQuery ? World::WorldCreateParameters::KHR_RAY_QUERY : World::WorldCreateParameters::AABB_GPU};
-    world            = World::createWorld(wcp);
+    world    = World::createWorld(wcp);
     resetScene();
     // pause the animation if asked.
     if (!o.animated) setAnimated(false);
@@ -92,30 +64,36 @@ void ModelViewer::resetScene() {
     cameras.clear();
     lights.clear();
 
-    // Create new scene (delete old one first)
+    // Create new scene and graph (delete old one first)
+    delete graph;
     world->deleteScene(scene);
+    world->prune(); // release unused resources.
     scene = world->createScene({});
+    graph = new sg::Graph(*scene);
 
     // initialize debug scene manager
     if (options.enableDebugGeometry) {
         sphereMesh   = createIcosahedron(1.0f, 2);
         circleMesh   = createCircle(1.0f, 1.0f);
         quadMesh     = createQuad(1.0f, 1.0f);
-        debugManager = std::make_unique<scenedebug::SceneDebugManager>(world, scene, sphereMesh, circleMesh, quadMesh);
+        debugManager = std::make_unique<scenedebug::SceneDebugManager>(world, graph, sphereMesh, circleMesh, quadMesh);
     }
 
     // create default materials
     auto mcd   = rt::Material::Desc {};
-    lambertian = scene->create("lambertian", mcd);
+    lambertian = world->create("lambertian", mcd);
     mcd.setRoughness(0.5f);
-    glossy = scene->create("glossy", mcd);
+    glossy = world->create("glossy", mcd);
 
     // setup default record parameters
-    recordParameters.shadowMode   = options.shadowMode;
-    recordParameters.ambientLight = {.01f, .01f, .01f};
+    recordParameters.scene           = scene;
+    recordParameters.ambientLight    = {.01f, .01f, .01f};
+    noiseFreeParameters.scene        = scene;
+    noiseFreeParameters.ambientLight = {.01f, .01f, .01f};
+    noiseFreeParameters.shadowMode   = options.shadowMode;
 
     // Creates the node and the default camera.
-    _firstPersonNode      = scene->createNode({});
+    _firstPersonNode      = graph->createNode({});
     float  w              = (float) sw().initParameters().width;
     float  h              = (float) sw().initParameters().height;
     Camera firstPersonCam = {.yFieldOfView = h / std::min<float>(w, h), // roughly 60 degree vertical FOV.
@@ -201,31 +179,28 @@ void ModelViewer::resized() {
 
     auto newW = sw().initParameters().width;
     auto newH = sw().initParameters().height;
-    if (!pathRayTracingRenderPack || newW != _renderTargetSize.width || newH != _renderTargetSize.height) {
+    if (newW != _renderTargetSize.width || newH != _renderTargetSize.height) {
         recreateMainRenderPack();
         _renderTargetSize.width  = newW;
         _renderTargetSize.height = newH;
     }
-    if (skybox) skybox->resize(newW, newH);
     PH_LOGI("[ModelViewer] resized to %ux%u", newW, newH);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-ph::rt::Node * ModelViewer::addMeshNode(ph::rt::Node * parent, const ph::rt::NodeTransform & transform, ph::rt::Mesh * mesh, ph::rt::Material * material) {
+sg::Node * ModelViewer::addMeshNode(sg::Node * parent, const sg::Transform & transform, ph::rt::Mesh * mesh, ph::rt::Material * material) {
     // Create the node that will manage the transforms.
-    ph::rt::Node * node = scene->createNode({parent});
+    sg::Node * node = graph->createNode(parent);
     node->setTransform(transform);
 
     node->name = mesh->name;
 
-    auto model = scene->createModel({
+    // Create the object that will display the mesh.
+    node->attachComponent(world->createModel({
         .mesh     = *mesh,
         .material = *material,
-    });
-
-    // Create the object that will display the mesh.
-    node->attachComponent(model);
+    }));
 
     return node;
 }
@@ -242,16 +217,15 @@ void ModelViewer::addSkybox(float lodBias) {
     auto reflection = textureCache->loadFromAsset(options.reflectionMapAsset);
     if (irradiance && reflection) {
         // Need to update environment map parameters too.
-        recordParameters.irradianceMap = irradiance;
-        recordParameters.reflectionMap = reflection;
+        noiseFreeParameters.irradianceMap = recordParameters.irradianceMap = irradiance;
+        noiseFreeParameters.reflectionMap = recordParameters.reflectionMap = reflection;
+
     } else {
-        recordParameters.irradianceMap = {};
-        recordParameters.reflectionMap = {};
+        noiseFreeParameters.irradianceMap = recordParameters.irradianceMap = {};
+        noiseFreeParameters.reflectionMap = recordParameters.reflectionMap = {};
     }
 
     Skybox::ConstructParameters cp = {loop(), *assetSys};
-    cp.width                       = sw().initParameters().width;
-    cp.height                      = sw().initParameters().height;
     cp.pass                        = mainColorPass();
     cp.skymap                      = reflection;
     cp.skymapType                  = Skybox::SkyMapType::CUBE;
@@ -279,7 +253,7 @@ void ModelViewer::setupDefaultCamera(const Eigen::AlignedBox3f & bbox) {
 
     if (options.flythroughCamera) {
         auto camPos = Eigen::Vector3f(sceneCenter.x(), sceneCenter.y(),
-                                      // camera's initial Z coordinate is dpending on handness.
+                                      // camera's initial Z coordinate is depending on handiness.
                                       sceneCenter.z() + sceneExtent * (options.leftHanded ? -1.0f : 1.0f));
         firstPersonController.setOrbitalCenter(nullptr).setPosition(camPos);
     } else {
@@ -290,19 +264,18 @@ void ModelViewer::setupDefaultCamera(const Eigen::AlignedBox3f & bbox) {
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-ph::rt::Light * ModelViewer::addPointLight(const Eigen::Vector3f & position, float range, const Eigen::Vector3f & emission, float radius,
-                                           bool enableDebugMesh) {
+sg::Node * ModelViewer::addPointLight(const Eigen::Vector3f & position, float range, const Eigen::Vector3f & emission, float radius, bool enableDebugMesh) {
     // Update light node transform.
-    ph::rt::NodeTransform transform = ph::rt::NodeTransform::Identity();
+    sg::Transform transform = sg::Transform::Identity();
     transform.translate(position);
 
     std::string name = formatstr("Point Light %zu", lights.size());
 
     // Create the light and the node.
-    auto node = scene->createNode({});
+    auto node = graph->createNode({});
     node->setTransform(transform);
     node->name = name;
-    auto light = scene->createLight({});
+    auto light = world->createLight({});
     node->attachComponent(light);
     light->reset(ph::rt::Light::Desc()
                      .setPoint(ph::rt::Light::Point())
@@ -315,27 +288,27 @@ ph::rt::Light * ModelViewer::addPointLight(const Eigen::Vector3f & position, flo
     light->shadowMap = textureCache->createShadowMapCube(name.c_str());
 
     // Save to the list of lights.
-    lights.push_back(light);
+    lights.push_back(node);
 
-    if (debugManager) debugManager->setDebugEnable(light, enableDebugMesh);
+    if (debugManager) debugManager->setDebugEnable(node, enableDebugMesh);
 
-    return light;
+    return node;
 }
 
-ph::rt::Light * ModelViewer::addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, float brightness,
-                                          Eigen::Vector2f cones, Eigen::Vector2f dimensions, bool enableDebugMesh) {
+sg::Node * ModelViewer::addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, float brightness, Eigen::Vector2f cones,
+                                     Eigen::Vector2f dimensions, bool enableDebugMesh) {
     return addSpotLight(position, direction, range, Eigen::Vector3f(brightness, brightness, brightness), cones, dimensions, enableDebugMesh);
 }
 
-ph::rt::Light * ModelViewer::addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, const Eigen::Vector3f & emission,
-                                          Eigen::Vector2f cones, Eigen::Vector2f dimensions, bool enableDebugMesh) {
+sg::Node * ModelViewer::addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, const Eigen::Vector3f & emission,
+                                     Eigen::Vector2f cones, Eigen::Vector2f dimensions, bool enableDebugMesh) {
     // Up is +Y, forward is +Z
     // Update light node transform.
-    ph::rt::NodeTransform transform = ph::rt::NodeTransform::Identity();
+    sg::Transform transform = sg::Transform::Identity();
     transform.translate(position);
 
     // Create the light and the node.
-    auto node = scene->createNode({});
+    auto node = graph->createNode({});
     node->setTransform(transform);
 
     if (cones.x() > HALF_PI) {
@@ -348,7 +321,7 @@ ph::rt::Light * ModelViewer::addSpotLight(const Eigen::Vector3f & position, cons
         cones.y() = cones.x();
     }
 
-    auto light = scene->createLight({});
+    auto light = world->createLight({});
     node->attachComponent(light);
     light->reset(ph::rt::Light::Desc()
                      .setSpot(ph::rt::Light::Spot().setDir(direction.x(), direction.y(), direction.z()).setFalloff(cones.y(), cones.x()))
@@ -358,29 +331,29 @@ ph::rt::Light * ModelViewer::addSpotLight(const Eigen::Vector3f & position, cons
 
     // TODO: Not tested with spot lights yet.
     light->shadowMap = textureCache->createShadowMap2D("spot light");
-    lights.push_back(light);
+    lights.push_back(node);
 
-    if (debugManager) debugManager->setDebugEnable(light, enableDebugMesh);
+    if (debugManager) debugManager->setDebugEnable(node, enableDebugMesh);
 
-    return light;
+    return node;
 }
 
-ph::rt::Light * ModelViewer::addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & dir, float brightness,
-                                                 const Eigen::Vector2f * dimensions, bool enableDebugMesh) {
+sg::Node * ModelViewer::addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & dir, float brightness, const Eigen::Vector2f * dimensions,
+                                            bool enableDebugMesh) {
     return addDirectionalLight(position, dir, Eigen::Vector3f(brightness, brightness, brightness), dimensions, enableDebugMesh);
 }
-ph::rt::Light * ModelViewer::addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, const Eigen::Vector3f & emission,
-                                                 const Eigen::Vector2f * dimensions, bool enableDebugMesh) {
+sg::Node * ModelViewer::addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, const Eigen::Vector3f & emission,
+                                            const Eigen::Vector2f * dimensions, bool enableDebugMesh) {
     // No need to manually set up transform matrix:
     // direction is normalized and composed with transform when populating light uniforms.
-    ph::rt::NodeTransform transform = ph::rt::NodeTransform::Identity();
+    sg::Transform transform = sg::Transform::Identity();
     transform.translate(position);
-    auto node = scene->createNode({});
+    auto node = graph->createNode({});
     node->setTransform(transform);
     Eigen::Vector2f dims = Eigen::Vector2f::Zero();
     if (dimensions) dims = *dimensions;
 
-    auto light = scene->createLight({});
+    auto light = world->createLight({});
     node->attachComponent(light);
     light->reset(ph::rt::Light::Desc()
                      .setDirectional(ph::rt::Light::Directional().setDir(direction.x(), direction.y(), direction.z()))
@@ -390,11 +363,11 @@ ph::rt::Light * ModelViewer::addDirectionalLight(const Eigen::Vector3f & positio
     // TODO haven't set up directional light shadow map rendering
     light->shadowMap = textureCache->createShadowMap2D("directional light");
 
-    lights.push_back(light);
+    lights.push_back(node);
 
-    if (debugManager) debugManager->setDebugEnable(light, enableDebugMesh);
+    if (debugManager) debugManager->setDebugEnable(node, enableDebugMesh);
 
-    return light;
+    return node;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -409,33 +382,58 @@ void ModelViewer::addCeilingLight(const Eigen::AlignedBox3f & bbox, float emissi
 //
 void ModelViewer::recreateMainRenderPack() {
     _renderPackDirty = false;
-    _accumDirty      = true;
     threadSafeDeviceWaitIdle(dev().vgi().device);
-    world->deleteRayTracingRenderPack(pathRayTracingRenderPack);
-    PH_ASSERT(!pathRayTracingRenderPack);
-    auto w  = sw().initParameters().width;
-    auto h  = sw().initParameters().height;
-    auto cp = World::RayTracingRenderPackCreateParameters {options.rpmode}
-                  .setTarget(sw().initParameters().colorFormat, w, h, VK_IMAGE_LAYOUT_UNDEFINED)
-                  .setViewport(0.f, 0.f, (float) w, (float) h)
-                  .setClear(true);
-    cp.targetIsSRGB                     = true;
-    cp.usePrecompiledShaderParameters   = options.usePrecompiledShaderParameters;
-    cp.refractionAndRoughReflection     = options.refractionAndRoughReflection;
-    pathRayTracingRenderPack            = world->createRayTracingRenderPack(cp);
-    recordParameters.spp                = options.spp;
-    recordParameters.maxDiffuseBounces  = options.diffBounces;
-    recordParameters.maxSpecularBounces = options.specBounces;
-    recordParameters.spp                = options.spp;
-    ptConfig.setupRp(recordParameters);
+    auto f = sw().initParameters().colorFormat;
+    auto w = sw().initParameters().width;
+    auto h = sw().initParameters().height;
+
+    safeDelete(pathTracingRenderPack);
+    safeDelete(noiseFreeRenderPack);
+
+    // recreate path tracing render pack
+    if (Options::RenderPackMode::PT == options.rpmode || Options::RenderPackMode::FAST_PT == options.rpmode) {
+        auto cp = render::PathTracingRenderPack::CreateParameters {world}
+                      .setFast(Options::RenderPackMode::FAST_PT == options.rpmode)
+                      .setTarget(f, w, h, VK_IMAGE_LAYOUT_UNDEFINED, options.renderToSRGB)
+                      .setViewport(0.f, 0.f, (float) w, (float) h)
+                      .setClear(true);
+        cp.usePrecompiledShaderParameters   = options.usePrecompiledShaderParameters;
+        cp.refractionAndRoughReflection     = options.refractionAndRoughReflection;
+        pathTracingRenderPack               = render::PathTracingRenderPack::create(cp);
+        recordParameters.spp                = options.spp;
+        recordParameters.maxDiffuseBounces  = options.diffBounces;
+        recordParameters.maxSpecularBounces = options.specBounces;
+        recordParameters.spp                = options.spp;
+        ptConfig.setupRp(recordParameters);
+    }
+
+    // recreate noise-free render pack
+    else {
+        auto cp = render::NoiseFreeRenderPack::CreateParameters {world};
+        switch (options.rpmode) {
+        case Options::RenderPackMode::NOISE_FREE:
+            cp.setMode(render::NoiseFreeRenderPack::Mode::NOISE_FREE);
+            break;
+        case Options::RenderPackMode::SHADOW:
+            cp.setMode(render::NoiseFreeRenderPack::Mode::SHADOW_TRACING);
+            break;
+        case Options::RenderPackMode::RAST:
+        default:
+            cp.setMode(render::NoiseFreeRenderPack::Mode::RASTERIZED);
+            break;
+        }
+        cp.setTarget(f, w, h, VK_IMAGE_LAYOUT_UNDEFINED, options.renderToSRGB).setViewport(0.f, 0.f, (float) w, (float) h).setClear(true);
+        noiseFreeRenderPack                    = render::NoiseFreeRenderPack::create(cp);
+        noiseFreeParameters.maxSpecularBounces = options.specBounces;
+    }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
 void ModelViewer::setupShadowRenderPack() {
-    world->deleteShadowMapRenderPack(shadowRenderPack);
-    shadowRenderPack =
-        world->createShadowMapRenderPack(World::ShadowMapRenderPackCreateParameters {}.set(shadowMapSize, shadowMapFormat, VK_IMAGE_LAYOUT_UNDEFINED));
+    safeDelete(shadowRenderPack);
+    auto cp          = render::ShadowMapRenderPack::CreateParameters {}.set(world, shadowMapSize, shadowMapFormat, VK_IMAGE_LAYOUT_UNDEFINED);
+    shadowRenderPack = render::ShadowMapRenderPack::create(cp);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -515,6 +513,16 @@ VkImageLayout ModelViewer::record(const SimpleRenderLoop::RecordParameters & rp)
     info.pClearValues           = clearValues;
     vkCmdBeginRenderPass(rp.cb, &info, VK_SUBPASS_CONTENTS_INLINE);
 
+    {
+        // setup default viewport and scissor, in case there are pipeline object that needs dynamic viewport/scissor.
+        auto       w        = sw().initParameters().width;
+        auto       h        = sw().initParameters().height;
+        VkViewport viewport = {0, 0, (float) w, (float) h, 0.0f, 1.0f};
+        auto       scissor  = VkRect2D {{0, 0}, {w, h}};
+        vkCmdSetViewport(rp.cb, 0, 1, &viewport);
+        vkCmdSetScissor(rp.cb, 0, 1, &scissor);
+    }
+
     // render to main color buffer
     {
         SimpleCpuFrameTimes::ScopedTimer c(app().cpuTimes(), "MainColorPass");
@@ -543,7 +551,7 @@ VkImageLayout ModelViewer::record(const SimpleRenderLoop::RecordParameters & rp)
 
 bool ModelViewer::accumDirty() {
     return (0 == options.accum || animated() || _lastCameraPosition != firstPersonController.position() ||
-            _lastCameraRotation != firstPersonController.angle() || _accumDirty);
+            _lastCameraRotation != firstPersonController.angle());
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -551,52 +559,69 @@ bool ModelViewer::accumDirty() {
 void ModelViewer::recordOffscreenPass(const PassParameters & p) {
     if (!scene) return;
 
-    auto & renderLoop   = app().loop();
+    // update world and scene
+    auto & renderLoop   = loop();
     auto   frameCounter = renderLoop.frameCounter();
     auto   safeFrame    = renderLoop.safeFrame();
     world->updateFrameCounter(frameCounter, safeFrame);
     skinningManager.record(renderLoop, p.cb);
-    scene->refreshGpuData(p.cb);
+    graph->refreshSceneGpuData(p.cb);
 
-    // stochastic path tracers don't need shadow maps
-    if (shadowRenderPack && (animated() || loop().frameCounter() == 0) && !ph::rt::World::RayTracingRenderPackCreateParameters::isStochastic(options.rpmode)) {
-        for (auto & l : lights) {
-            if (Light::Type::OFF == l->desc().type || !l->desc().allowShadow) continue;
-
-            shadowParameters.commandBuffer = p.cb;
-            shadowParameters.light         = l;
-            shadowRenderPack->record(shadowParameters);
-
-            // transfer shadow map layout from writing to reading
-            va::setImageLayout(p.cb, l->shadowMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                               VkImageSubresourceRange {VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS},
-                               VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-        }
+    if (options.isPathTraced()) {
+        // render the scene with path tracer.
+        recordPathTracer(p);
+    } else {
+        // render the scene with noise free render pack.
+        recordShadowMap(p);
+        recordNoiseFree(p);
     }
 
-    // setup recording parameters then start recording of command buffer.
+    _lastCameraPosition = firstPersonController.position();
+    _lastCameraRotation = firstPersonController.angle();
+}
+
+void ModelViewer::recordShadowMap(const PassParameters & p) {
+    if (!shadowRenderPack) return;
+    if (!animated() && loop().frameCounter() > 0) return; // no need to render shadow map if scene is not animated.
+    for (auto & n : lights) {
+        auto l = n->light();
+        if (Light::Type::OFF == l->desc().type || !l->desc().allowShadow) continue;
+
+        shadowParameters.commandBuffer = p.cb;
+        shadowParameters.scene         = scene;
+        shadowParameters.lightEntity   = n->lightEntity();
+        shadowRenderPack->record(shadowParameters);
+
+        // transfer shadow map layout from writing to reading
+        va::setImageLayout(p.cb, l->shadowMap.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                           VkImageSubresourceRange {VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS},
+                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    }
+}
+
+void ModelViewer::recordPathTracer(const PassParameters & p) {
+    if (!pathTracingRenderPack) return;
+
     recordParameters.scene         = scene;
     recordParameters.commandBuffer = p.cb;
     recordParameters.targetView    = p.bb.view;
     recordParameters.depthView     = p.depthView;
     recordParameters.targetImage   = p.bb.image;
-    recordParameters.projMatrix =
-        fromEigen(cameras[selectedCameraIndex].calculateProj(((float) sw().initParameters().width), ((float) sw().initParameters().height)));
-    recordParameters.viewMatrix    = NodeTransform(cameras[selectedCameraIndex].worldTransform().inverse());
-    recordParameters.sceneExtents  = fromEigen(Eigen::Vector3f(_bounds.diagonal()));
+    recordParameters.projMatrix    = cameras[selectedCameraIndex].calculateProj(((float) sw().initParameters().width), ((float) sw().initParameters().height));
+    recordParameters.viewMatrix    = sg::Transform(cameras[selectedCameraIndex].worldTransform().inverse());
+    recordParameters.sceneExtents  = _bounds.diagonal();
     auto center                    = _bounds.center();
-    recordParameters.sceneCenter.x = center.x();
-    recordParameters.sceneCenter.y = center.y();
-    recordParameters.sceneCenter.z = center.z();
+    recordParameters.sceneCenter.x() = center.x();
+    recordParameters.sceneCenter.y() = center.y();
+    recordParameters.sceneCenter.z() = center.z();
     ptConfig.setupRp(recordParameters);
-    pathRayTracingRenderPack->record(recordParameters);
+    pathTracingRenderPack->record(recordParameters);
 
     // update accumulation parameters
-    using Accumulation = RayTracingRenderPack::Accumulation;
+    using Accumulation = render::PathTracingRenderPack::Accumulation;
     if (accumDirty()) {
         recordParameters.accum = Accumulation::OFF;
         _accumProgress         = 0.0f;
-        _accumDirty            = false;
     } else if (options.accum > 0) {
         // frame based limiter
         if (Accumulation::OFF == recordParameters.accum) {
@@ -608,7 +633,7 @@ void ModelViewer::recordOffscreenPass(const PassParameters & p) {
             _accumProgress = (float) _accumProgress / options.accum;
             ++_accumulatedFrames;
             if (_accumulatedFrames >= (size_t) options.accum) {
-                PH_LOGI("Accumulation completed: %llu frames.", _accumulatedFrames);
+                PH_LOGI("Accumulation completed: %zu frames.", _accumulatedFrames);
                 recordParameters.accum = Accumulation::RETAIN;
             }
         }
@@ -634,8 +659,23 @@ void ModelViewer::recordOffscreenPass(const PassParameters & p) {
             }
         }
     }
-    _lastCameraPosition = firstPersonController.position();
-    _lastCameraRotation = firstPersonController.angle();
+}
+
+void ModelViewer::recordNoiseFree(const PassParameters & p) {
+    if (!noiseFreeRenderPack) return;
+    noiseFreeParameters.scene         = scene;
+    noiseFreeParameters.commandBuffer = p.cb;
+    noiseFreeParameters.targetView    = p.bb.view;
+    noiseFreeParameters.depthView     = p.depthView;
+    noiseFreeParameters.targetImage   = p.bb.image;
+    auto & camera                     = cameras[selectedCameraIndex];
+    float  width                      = (float) sw().initParameters().width;
+    float  height                     = (float) sw().initParameters().height;
+    noiseFreeParameters.projMatrix    = camera.calculateProj(width, height);
+    auto camera2World                 = sg::Transform(camera.worldTransform());
+    auto world2Camera                 = camera2World.inverse().matrix();
+    noiseFreeParameters.viewMatrix    = world2Camera;
+    noiseFreeRenderPack->record(noiseFreeParameters);
 }
 
 void ModelViewer::onKeyPress(int key, bool down) {
@@ -724,15 +764,16 @@ void ModelViewer::onMouseWheel(float delta) {
 // ---------------------------------------------------------------------------------------------------------------------
 //
 void ModelViewer::recordMainColorPass(const PassParameters & p) {
-    if (skybox && (ph::rt::World::RayTracingRenderPackCreateParameters::isNoiseFree(options.rpmode))) {
+    // draw skybox only  noise free and rasterization modes
+    if (skybox && !options.isPathTraced()) {
         // The camera's transformation matrix.
         auto &          camera = cameras[selectedCameraIndex];
         Eigen::Matrix4f proj   = camera.calculateProj(((float) sw().initParameters().width), ((float) sw().initParameters().height));
         // Draw skybox as part of the main render pass
         // FIXME: in theory, we should set sRGB to TRUE, since the swapchain buffer is in sRGB color space (See VK_COLOR_SPACE_SRGB_NONLINEAR_KHR flag
         // used in swapchain.cpp). But somehow that makes the sky box too bright.
-        skybox->draw(p.cb, proj, camera.worldTransform().rotation(), recordParameters.saturation, recordParameters.gamma, recordParameters.sRGB,
-                     recordParameters.skyboxRotation, skyboxLodBias, toEigen(recordParameters.ambientLight));
+        skybox->draw(p.cb, proj, camera.worldTransform().rotation(), recordParameters.saturation, recordParameters.gamma, options.renderToSRGB,
+                     recordParameters.skyboxRotation, skyboxLodBias, recordParameters.ambientLight);
     }
 }
 
@@ -744,7 +785,7 @@ Eigen::AlignedBox3f ModelViewer::addModelToScene(const LoadOptions & o) {
     return bbox;
 }
 
-ph::rt::Node * ModelViewer::addModelNodeToScene(const LoadOptions & o, Eigen::AlignedBox3f & bbox) {
+sg::Node * ModelViewer::addModelNodeToScene(const LoadOptions & o, Eigen::AlignedBox3f & bbox) {
     std::filesystem::path modelPath = o.model;
     auto                  ext       = modelPath.extension().string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](auto c) { return (char) std::tolower(c); });
@@ -772,7 +813,7 @@ ph::rt::Node * ModelViewer::addModelNodeToScene(const LoadOptions & o, Eigen::Al
     }
 }
 
-Eigen::AlignedBox3f ModelViewer::transformBbox(Eigen::AlignedBox3f bbox, ph::rt::NodeTransform t) {
+Eigen::AlignedBox3f ModelViewer::transformBbox(Eigen::AlignedBox3f bbox, sg::Transform t) {
     Eigen::AlignedBox3f transformedBbox;
 
     // Graphics Gems 1990 Arvo method for quickly transforming a bbox.
@@ -813,7 +854,7 @@ Eigen::AlignedBox3f ModelViewer::transformBbox(Eigen::AlignedBox3f bbox, ph::rt:
 
 ph::rt::Mesh * ModelViewer::createNonIndexedMesh(size_t vertexCount, const float * positions, const float * normals, const float * texcoords,
                                                  const float * tangents) {
-    ph::rt::Scene::MeshCreateParameters mcp = {vertexCount};
+    ph::rt::Mesh::CreateParameters mcp = {vertexCount};
 
     // mcp.vertices.position.buffer = _sbb.uploadData(positions, vertexCount * 3);
     ConstRange<float, size_t> pos(positions, (size_t) vertexCount * 3);
@@ -841,12 +882,12 @@ ph::rt::Mesh * ModelViewer::createNonIndexedMesh(size_t vertexCount, const float
         mcp.vertices.tangent.stride = sizeof(Eigen::Vector3f);
         mcp.vertices.tangent.format = VK_FORMAT_R32G32B32_SFLOAT;
     }
-    return scene->createMesh(mcp);
+    return world->createMesh(mcp);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-ph::rt::Node * ModelViewer::loadObj(const LoadOptions & o, Eigen::AlignedBox3f & bbox) {
+sg::Node * ModelViewer::loadObj(const LoadOptions & o, Eigen::AlignedBox3f & bbox) {
     // load asset into memory
     auto asset = assetSys->load(o.model.c_str()).get();
     PH_REQUIRE(!asset.content.empty());
@@ -864,7 +905,7 @@ ph::rt::Node * ModelViewer::loadObj(const LoadOptions & o, Eigen::AlignedBox3f &
     auto jmesh  = createNonIndexedMesh(mesh.position.size(), (const float *) mesh.position.data(), (const float *) mesh.normal.data(),
                                       (const float *) mesh.texcoord.data(), (const float *) mesh.tangent.data());
     jmesh->name = o.model;
-    auto jnode  = addMeshNode(o.parent, ph::rt::NodeTransform::Identity(), jmesh, material);
+    auto jnode  = addMeshNode(o.parent, sg::Transform::Identity(), jmesh, material);
 
     PH_LOGI(".OBJ mesh loaded with %zu vertices", mesh.position.size());
 
@@ -875,7 +916,7 @@ ph::rt::Node * ModelViewer::loadObj(const LoadOptions & o, Eigen::AlignedBox3f &
 //
 std::shared_ptr<const SceneAsset> ModelViewer::loadGltf(const LoadOptions & o) {
     // load GLTF scene
-    GLTFSceneReader sceneReader(assetSys, textureCache.get(), world, scene, skinningManager.skinDataMap(), &morphTargetManager, &sbb, o.createGeomLights);
+    GLTFSceneReader sceneReader(assetSys, textureCache.get(), graph, skinningManager.skinDataMap(), &morphTargetManager, &sbb, o.createGeomLights);
     std::shared_ptr<const SceneAsset> sceneAsset = sceneReader.read(o.model);
 
     // Add contents to the scene.
@@ -1039,9 +1080,9 @@ void ModelViewer::addCornellBoxToScene(const Eigen::AlignedBox3f & bbox) {
         }
     };
     auto baseDesc = []() { return rt::Material::Desc {}; };
-    auto white    = scene->create("white", baseDesc());
-    auto red      = scene->create("red", baseDesc().setAlbedo(1.f, 0.f, 0.f));
-    auto green    = scene->create("green", baseDesc().setAlbedo(0.f, 1.f, 0.f));
+    auto white    = world->create("white", baseDesc());
+    auto red      = world->create("red", baseDesc().setAlbedo(1.f, 0.f, 0.f));
+    auto green    = world->create("green", baseDesc().setAlbedo(0.f, 1.f, 0.f));
     addWall("back", 0, white);
     addWall("top", 1, white);
     addWall("bottom", 2, white);
@@ -1053,16 +1094,15 @@ void ModelViewer::addCornellBoxToScene(const Eigen::AlignedBox3f & bbox) {
     mesh->name = "cornell box";
 
     // Create the node that will manage the transforms.
-    ph::rt::Node * node = scene->createNode({});
-    node->name          = mesh->name;
+    sg::Node * node = graph->createNode({});
+    node->name      = mesh->name;
 
     // Create the object that will display the mesh.
-    auto model = scene->createModel({
+    node->attachComponent(world->createModel({
         .mesh     = *mesh,
         .material = *white,
         .subsets  = subsets,
-    });
-    node->attachComponent(model);
+    }));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -1115,7 +1155,7 @@ Eigen::AlignedBox3f ModelViewer::addFloorPlaneToScene(const Eigen::Vector3f & ce
 
     auto mesh  = createNonIndexedMesh(vertices.size() / 3, vertices.data(), normals.data(), nullptr, tangents.data());
     mesh->name = "floor";
-    addMeshNode(nullptr, ph::rt::NodeTransform::Identity(), mesh, lambertian);
+    addMeshNode(nullptr, sg::Transform::Identity(), mesh, lambertian);
 
     return {Eigen::Vector3f(v[0]), Eigen::Vector3f(v[2])};
 }
@@ -1165,8 +1205,8 @@ rt::Mesh * ModelViewer::createIcosahedron(float radius, uint32_t subdivide, cons
     return createNonIndexedMesh(vertices.size(), vertices[0].data(), normals[0].data(), nullptr, tangents[0].data());
 }
 
-rt::Node * ModelViewer::addIcosahedron(const char * name, float radius, uint32_t subdivide, rt::Material * material, rt::Node * parent,
-                                       const rt::NodeTransform & transform) {
+sg::Node * ModelViewer::addIcosahedron(const char * name, float radius, uint32_t subdivide, rt::Material * material, sg::Node * parent,
+                                       const sg::Transform & transform) {
     auto mesh = createIcosahedron(radius, subdivide, &material->desc().anisotropic);
     if (name) mesh->name = name;
 
@@ -1218,8 +1258,7 @@ rt::Mesh * ModelViewer::createQuad(float w, float h) {
     return mesh;
 }
 
-rt::Node * ModelViewer::addQuad(const char * name, float w, float h, ph::rt::Material * material, ph::rt::Node * parent,
-                                const ph::rt::NodeTransform & transform) {
+sg::Node * ModelViewer::addQuad(const char * name, float w, float h, ph::rt::Material * material, sg::Node * parent, const sg::Transform & transform) {
     auto mesh  = createQuad(w, h);
     mesh->name = name;
     return addMeshNode(parent, transform, mesh, material);
@@ -1262,8 +1301,7 @@ rt::Mesh * ModelViewer::createCircle(float w, float h) {
 // Todo: Subdivide
 // Currently defaults to 12 triangles in a fan about the center.
 // Repeats vertices; no indices.
-rt::Node * ModelViewer::addCircle(const char * name, float w, float h, ph::rt::Material * material, ph::rt::Node * parent,
-                                  const ph::rt::NodeTransform & transform) {
+sg::Node * ModelViewer::addCircle(const char * name, float w, float h, ph::rt::Material * material, sg::Node * parent, const sg::Transform & transform) {
     auto mesh  = createCircle(w, h);
     mesh->name = name;
     return addMeshNode(parent, transform, mesh, material);
@@ -1271,7 +1309,7 @@ rt::Node * ModelViewer::addCircle(const char * name, float w, float h, ph::rt::M
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-rt::Node * ModelViewer::addBox(const char * name, float w, float h, float d, rt::Material * material, rt::Node * parent, const rt::NodeTransform & transform) {
+sg::Node * ModelViewer::addBox(const char * name, float w, float h, float d, rt::Material * material, sg::Node * parent, const sg::Transform & transform) {
     // create box walls
     const float z      = options.leftHanded ? -1.0f : 1.0f; // flip Z for left handed coordinate system.
     const float l      = -w / 2.0f;                         // left
@@ -1422,7 +1460,7 @@ void ModelViewer::describeImguiUI() {
         ImGui::Text("Active triangle Count = %zu", scenePerf.triangleCount);
         ImGui::BeginTable("Ray Tracing GPU Perf", 3, ImGuiTableFlags_Borders);
         for (const auto & i : scenePerf.gpuTimestamps) { drawPerfRow(0, i.name, i.durationNs, frameDuration.gpu.average); }
-        for (const auto & i : pathRayTracingRenderPack->perfStats().gpuTimestamps) { drawPerfRow(0, i.name, i.durationNs, frameDuration.gpu.average); }
+        for (const auto & i : pathTracingRenderPack->perfStats().gpuTimestamps) { drawPerfRow(0, i.name, i.durationNs, frameDuration.gpu.average); }
         if (shadowRenderPack) {
             for (const auto & i : shadowRenderPack->perfStats().gpuTimestamps) { drawPerfRow(0, i.name, i.durationNs, frameDuration.gpu.average); }
         }
@@ -1432,11 +1470,26 @@ void ModelViewer::describeImguiUI() {
     if (ImGui::TreeNode("Render Pack")) {
         if (ImGui::BeginListBox("", ImVec2(0, 4 * ImGui::GetTextLineHeightWithSpacing()))) {
             using RenderPackMode = Options::RenderPackMode;
-            if (ImGui::Selectable("Rasterize", options.rpmode == RenderPackMode::RASTERIZED)) { setRpMode(RenderPackMode::RASTERIZED); }
-            if (ImGui::Selectable("Shadows Only Tracing", options.rpmode == RenderPackMode::SHADOW_TRACING)) { setRpMode(RenderPackMode::SHADOW_TRACING); }
-            if (ImGui::Selectable("Noise-Free Path Tracing", options.rpmode == RenderPackMode::NOISE_FREE)) { setRpMode(RenderPackMode::NOISE_FREE); }
-            if (ImGui::Selectable("Fast Path Tracing", options.rpmode == RenderPackMode::FAST_PT)) { setRpMode(RenderPackMode::FAST_PT); }
-            if (ImGui::Selectable("Path Tracing", options.rpmode == RenderPackMode::PATH_TRACING)) { setRpMode(RenderPackMode::PATH_TRACING); }
+            if (ImGui::Selectable("Rasterize", options.rpmode == RenderPackMode::RAST)) {
+                _renderPackDirty = options.rpmode != RenderPackMode::RAST;
+                options.rpmode   = RenderPackMode::RAST;
+            }
+            if (ImGui::Selectable("Shadows Only Tracing", options.rpmode == RenderPackMode::SHADOW)) {
+                _renderPackDirty = options.rpmode != RenderPackMode::SHADOW;
+                options.rpmode   = RenderPackMode::SHADOW;
+            }
+            if (ImGui::Selectable("Noise-Free Path Tracing", options.rpmode == RenderPackMode::NOISE_FREE)) {
+                _renderPackDirty = options.rpmode != RenderPackMode::NOISE_FREE;
+                options.rpmode   = RenderPackMode::NOISE_FREE;
+            }
+            if (ImGui::Selectable("Fast Path Tracing", options.rpmode == RenderPackMode::FAST_PT)) {
+                _renderPackDirty = options.rpmode != RenderPackMode::FAST_PT;
+                options.rpmode   = RenderPackMode::FAST_PT;
+            }
+            if (ImGui::Selectable("Path Tracing", options.rpmode == RenderPackMode::PT)) {
+                _renderPackDirty = options.rpmode != RenderPackMode::PT;
+                options.rpmode   = RenderPackMode::PT;
+            }
             ImGui::EndListBox();
         }
         ImGui::TreePop();
@@ -1451,7 +1504,7 @@ void ModelViewer::describeImguiUI() {
             const auto & a = firstPersonController.angle();
             ImGui::Text("position: %f, %f, %f", p.x(), p.y(), p.z());
             ImGui::Text("angle   : %f, %f, %f", a.x(), a.y(), a.z());
-            NodeTransform      fptfm = firstPersonController.getWorldTransform();
+            sg::Transform      fptfm = firstPersonController.getWorldTransform();
             Eigen::Quaternionf fprotation;
             fptfm.decompose(nullptr, &fprotation, nullptr);
             ImGui::Text("rotation: %f, %f, %f, %f", fprotation.x(), fprotation.y(), fprotation.z(), fprotation.w());
@@ -1473,7 +1526,7 @@ void ModelViewer::describeImguiUI() {
                 if (ImGui::TreeNode(formatstr("Camera %zu", i))) {
                     Eigen::Vector3f    t;
                     Eigen::Quaternionf r;
-                    ph::rt::NodeTransform(c.node->worldTransform()).decompose(&t, &r, nullptr);
+                    sg::Transform(c.node->worldTransform()).decompose(&t, &r, nullptr);
                     ImGui::Text("position: %f, %f, %f", t.x(), t.y(), t.z());
                     ImGui::Text("rotation: %f, %f, %f, %f", r.x(), r.y(), r.z(), r.w());
                     ImGui::SliderFloat("znear", &c.zNear, 0.00001f, 0.1f);
@@ -1484,7 +1537,7 @@ void ModelViewer::describeImguiUI() {
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Light")) {
-            ImGui::ColorEdit3("Ambient", &recordParameters.ambientLight.x);
+            ImGui::ColorEdit3("Ambient", &recordParameters.ambientLight.x());
             if (ImGui::BeginTable("Light Objects from Skybox", 2)) { // todo make this work for path tracer?
                 ImGui::TableNextColumn();
                 if (ImGui::RadioButton("On", recordParameters.skyboxLighting == 1)) { recordParameters.skyboxLighting = 1; }
@@ -1495,7 +1548,7 @@ void ModelViewer::describeImguiUI() {
             ImGui::SliderFloat("Skybox Rotation", &recordParameters.skyboxRotation, 0.0f, 2.f * PI);
             ImGui::Text("Light Count: %u", (int) lights.size()); // show light amt
             for (size_t i = 0; i < lights.size(); ++i) {
-                auto light = lights[i];
+                auto light = lights[i]->light();
                 if (light) {
                     if (ImGui::TreeNode(formatstr("Light %zu", i))) {
                         auto desc = light->desc();
@@ -1504,11 +1557,11 @@ void ModelViewer::describeImguiUI() {
                         ImGui::SliderFloat("bias", &light->shadowMapBias, 0.f, 0.01f);
                         ImGui::SliderFloat("slope bias", &light->shadowMapSlopeBias, 0.f, 0.01f);
                         // changed to color for ease of use
-                        ImGui::ColorEdit3("emission", &desc.emission.x,
+                        ImGui::ColorEdit3("emission", &desc.emission.x(),
                                           ImGuiColorEditFlags_Float |              // use 0f-1f instead of 0 to 255
                                               ImGuiColorEditFlags_HDR |            // have values greater than 1
                                               ImGuiColorEditFlags_PickerHueWheel); // changed to a color wheel for ease of use
-                        if (debugManager) ImGui::Checkbox("Enable Debug Mesh", debugManager->getDebugEnable(light));
+                        if (debugManager) ImGui::Checkbox("Enable Debug Mesh", debugManager->getDebugEnable(lights[i]));
                         ImGui::SliderFloat("range", &desc.range, 0.01f, 1000.0f);
                         bool  npAreaLight = (desc.dimension[0] < 0.0f) || (desc.dimension[1] < 0.0f);
                         float dim0        = std::abs(desc.dimension[0]);
@@ -1547,7 +1600,7 @@ void ModelViewer::describeImguiUI() {
                         // shadow toggle
                         ImGui::Checkbox("Allow Shadows", &desc.allowShadow);
                         light->reset(desc);
-                        if (debugManager) debugManager->updateDebugLight(light);
+                        if (debugManager) debugManager->updateDebugLight(lights[i]);
                         ImGui::TreePop();
                     }
                 }
@@ -1557,13 +1610,16 @@ void ModelViewer::describeImguiUI() {
         ImGui::TreePop();
     }
 
-    if (ImGui::Checkbox("Handle Refraction and Rough Reflection", &options.refractionAndRoughReflection)) _renderPackDirty = true;
+    // if (ImGui::Checkbox("Handle Refraction and Rough Reflection", &options.refractionAndRoughReflection)) _renderPackDirty = true;
 
-    if (ImGui::Checkbox("Use Precompiled Shader Parameters", &options.usePrecompiledShaderParameters)) _renderPackDirty = true;
-    if (!options.usePrecompiledShaderParameters && ImGui::TreeNode("Debug")) {
+    // if (ImGui::Checkbox("Use Precompiled Shader Parameters", &options.usePrecompiledShaderParameters)) _renderPackDirty = true;
+
+    if (ImGui::TreeNode("Debug")) {
+#if 0
+        // temporarily disabled due to path tracer and noise free split.
         if (ImGui::TreeNode("Quality")) {
             if (ImGui::TreeNode("Ray Bounces")) {
-                if (ph::rt::World::RayTracingRenderPackCreateParameters::isStochastic(options.rpmode)) {
+                if (ph::rt::render::RayTracingRenderPack::CreateParameters::isStochastic(options.rpmode)) {
                     ImGui::SliderInt("Max Diffuse Bounces", (int *) &recordParameters.maxDiffuseBounces, 0, 5);
                 }
                 ImGui::SliderInt("Max Specular Bounces", (int *) &recordParameters.maxSpecularBounces, 0, 10);
@@ -1610,8 +1666,8 @@ void ModelViewer::describeImguiUI() {
             ImGui::TreePop();
         }
         if (ImGui::TreeNode("Shadow")) {
-            using ShadowMode = ph::rt::RayTracingRenderPack::ShadowMode;
-            if (ImGui::BeginTable("Shadow Mode", (int) ph::rt::RayTracingRenderPack::ShadowMode::NUM_SHADOW_MODES)) {
+            using ShadowMode = ph::rt::render::NoiseFreeRenderPack::ShadowMode;
+            if (ImGui::BeginTable("Shadow Mode", (int) ph::rt::render::NoiseFreeRenderPack::ShadowMode::NUM_SHADOW_MODES)) {
                 ImGui::TableNextColumn();
                 if (ImGui::RadioButton("Rasterized", recordParameters.shadowMode == ShadowMode::RASTERIZED)) {
                     recordParameters.shadowMode = ShadowMode::RASTERIZED;
@@ -1651,21 +1707,18 @@ void ModelViewer::describeImguiUI() {
             }
             ImGui::TreePop();
         }
+#endif
 
+        // The heat map view only works when we use in-house BVH traversal and noise free render pack.
         bool softwareRayQuery = !app().cp().rayQuery;
-        bool noiseFree        = ph::rt::World::RayTracingRenderPackCreateParameters::isNoiseFree(options.rpmode);
-        if (softwareRayQuery || noiseFree) {
-            // for now, this heat view only works when we use in-house BVH traversal.
-            ImGui::Checkbox("Show heat view", &recordParameters.enableHeatMap);
-            if (!noiseFree && recordParameters.enableHeatMap) {
-                ImGui::SliderFloat("Max # traversal steps", &recordParameters.maxNumTraversalSteps, 0.0, 300.0, "%.1f");
-            }
-        }
+        bool noiseFree        = !options.isPathTraced();
+        if (softwareRayQuery && noiseFree) { ImGui::Checkbox("Show heat view", &noiseFreeParameters.enableHeatMap); }
 
         // skinningManager.describeImguiUI(options.skinMode);
         // morphTargetManager.describeImguiUI(options.morphMode);
 
-        if (ph::rt::World::RayTracingRenderPackCreateParameters::isStochastic(options.rpmode)) ptConfig.describeImguiUI();
+        if (options.isPathTraced()) ptConfig.describeImguiUI();
+
         ImGui::TreePop();
     }
 }

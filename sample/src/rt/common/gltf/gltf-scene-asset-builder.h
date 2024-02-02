@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -35,7 +38,7 @@ public:
      * @param assetBaseDirectory The path holding the directory where
      * the gltf file is located. Is used to resolve relative paths.
      */
-    GLTFSceneAssetBuilder(ph::AssetSystem * assetSys, TextureCache * textureCache, ph::rt::Scene * scene, const tinygltf::Model * model,
+    GLTFSceneAssetBuilder(ph::AssetSystem * assetSys, TextureCache * textureCache, sg::Graph * graph, const tinygltf::Model * model,
                           const std::string & assetBaseDirectory, skinning::SkinMap * skinnedMeshes, MorphTargetManager * morphTargetManager,
                           SceneBuildBuffers * sbb, bool createGeomLights);
 
@@ -43,11 +46,6 @@ public:
      * Destructor.
      */
     virtual ~GLTFSceneAssetBuilder() = default;
-
-    /**
-     * @return The scene used to create new objects.
-     */
-    ph::rt::Scene * getScene() { return _scene; }
 
     /**
      * @return The tinygltf model who's items are being instantiated in scene.
@@ -64,9 +62,8 @@ public:
      * Generates all the nodes for the scene, saves them
      * and the associated resource objects to a SceneAsset,
      * then returns the newly created scene asset.
-     * @param mainScene The main scene nodes will be added to.
      */
-    std::shared_ptr<SceneAsset> build(ph::rt::Scene * mainScene);
+    std::shared_ptr<SceneAsset> build();
 
 private:
     /**
@@ -102,7 +99,7 @@ private:
     /**
      * The scene everything is being instantiated in.
      */
-    ph::rt::Scene * _scene;
+    sg::Graph * _graph;
 
     /**
      * The tinygltf model who's items are being instantiated in scene.
@@ -124,7 +121,7 @@ private:
 
     SceneBuildBuffers * _sbb;
 
-    std::vector<std::pair<ph::rt::Node *, ph::rt::Light *>> _geomLights;
+    std::vector<std::pair<sg::Node *, ph::rt::Light *>> _geomLights;
 
     /**
      * Maps each tiny gltf material id to its PhysRay equivelant.
@@ -206,7 +203,7 @@ private:
      * @param phNode The node being used as a parent for all the primitives.
      * @param node The tiny gltf node we are generating primitives for.
      */
-    void addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::Node * phNode, const tinygltf::Node & node);
+    void addMeshPrimitives(SceneAsset * sceneAsset, sg::Node * phNode, const tinygltf::Node & node);
 
     /**
      * Attaches camera to this node.
@@ -214,7 +211,7 @@ private:
      * @param cameraId Id of the camera for this node. If -1,
      * this method does not do anything.
      */
-    void addNodeCamera(SceneAsset * sceneAsset, ph::rt::Node * phNode, int cameraId);
+    void addNodeCamera(SceneAsset * sceneAsset, sg::Node * phNode, int cameraId);
 
     /**
      * Applies the effects of any extensions to the given node.
@@ -222,7 +219,7 @@ private:
      * @param groupNode The PhysRay node being used as a parent for all the primitives.
      * @param node The tiny gltf node we are processing the extensions for.
      */
-    void processNodeExtensions(SceneAsset * sceneAsset, ph::rt::Node * phNode, const tinygltf::Node & node);
+    void processNodeExtensions(SceneAsset * sceneAsset, sg::Node * phNode, const tinygltf::Node & node);
 
     /**
      * Attaches light to this node.
@@ -230,7 +227,7 @@ private:
      * @param lightId Id of the light for this node. If -1,
      * this method does not do anything.
      */
-    void addNodeLight(SceneAsset * sceneAsset, ph::rt::Node * phNode, int lightId);
+    void addNodeLight(SceneAsset * sceneAsset, sg::Node * phNode, int lightId);
 
     bool _createGeomLights;
 };

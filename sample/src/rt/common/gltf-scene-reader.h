@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -31,18 +34,10 @@ public:
      * @param world The world used to generate objects.
      * @param mainScene The main scene nodes will be added to.
      */
-    GLTFSceneReader(ph::AssetSystem * assetSystem, TextureCache * textureCache, ph::rt::World * world, ph::rt::Scene * mainScene,
-                    skinning::SkinMap * skinnedMeshes, MorphTargetManager * morphTargetManager, SceneBuildBuffers * sbb, bool createGeomLights);
+    GLTFSceneReader(ph::AssetSystem * assetSystem, TextureCache * textureCache, sg::Graph * graph, skinning::SkinMap * skinnedMeshes,
+                    MorphTargetManager * morphTargetManager, SceneBuildBuffers * sbb, bool createGeomLights);
 
     virtual ~GLTFSceneReader() = default;
-
-    ph::AssetSystem * getAssetSystem() { return _assetSystem; }
-
-    TextureCache * getTextureCache() { return _textureCache; }
-
-    ph::rt::World * getWorld() { return _world; }
-
-    ph::rt::Scene * getMainScene() { return _mainScene; }
 
     std::shared_ptr<const SceneAsset> read(const std::string & assetPath);
 
@@ -58,14 +53,9 @@ private:
     TextureCache * _textureCache;
 
     /**
-     * The world being used to generate objects.
-     */
-    ph::rt::World * _world;
-
-    /**
      * The main scene nodes are being added to.
      */
-    ph::rt::Scene * _mainScene;
+    sg::Graph * _mainGraph;
 
     skinning::SkinMap *  _skinnedMeshes;
     MorphTargetManager * _morphTargetManager;

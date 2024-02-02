@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -33,12 +36,12 @@ public:
      * @return a newly created light matching the given tinygtlf light.
      * Returns a null pointer if light type isn't supported.
      */
-    ph::rt::Light * build(const tinygltf::Light & light, ph::rt::Node * node);
+    ph::rt::Light * build(const tinygltf::Light & light, sg::Node * node);
 
 private:
     TextureCache * _textureCache;
 
-    ph::rt::Float3 getEmissive(const tinygltf::Light & light);
+    Eigen::Vector3f getEmissive(const tinygltf::Light & light);
 };
 
 } // namespace gltf

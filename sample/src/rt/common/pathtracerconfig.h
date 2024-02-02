@@ -1,8 +1,8 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
-#include <ph/rt-utils.h>
+#include <ph/rt-render.h>
 #include "ui.h"
 
 // Configures path tracer
@@ -19,7 +19,7 @@ public:
         bool        isThin       = false;
 
         void setSubsurfaceMaterial(ph::rt::Scene * scene, std::unique_ptr<TextureCache> & textureCache) {
-            auto               mats     = scene->materials();
+            auto               mats     = scene->world()->materials();
             ph::rt::Material * material = nullptr;
             for (auto mat : mats) {
                 if (mat->name == materialName) {
@@ -79,30 +79,24 @@ public:
     uint32_t    misMode;
 
     // By default, full featureset is enabled
-    PathTracerConfig(bool pathTracerEnabled = false) {
+    PathTracerConfig() {
         initialCandidateCount = 0;
         misMode               = 0;
-        if (pathTracerEnabled) {
-            jitterAmount     = 0.0f; // cast primary ray; don't jitter prez camera
-            subsurfaceChance = 0.5f; // uniformly sample between subsurface indirect and reflected indirect
-
-        } else {
-            jitterAmount     = 0.0f;
-            subsurfaceChance = 0.0f;
-        }
-        rmaxScalar        = 1.f;
-        emissionScalar    = 1.f;
-        sssamtScalar      = 1.f;
-        nChance           = 0.5f;
-        gaussV            = 1.f;
-        clusterMode       = ClusterMode::Disabled;
-        sceneSubdivisions = 1;
-        restirMode        = ReSTIRMode::InitialCandidates; // ReSTIR Mode
-        enableRestirMap   = false;
+        jitterAmount          = 0.0f; // cast primary ray; don't jitter prez camera
+        subsurfaceChance      = 0.5f; // uniformly sample between subsurface indirect and reflected indirect
+        rmaxScalar            = 1.f;
+        emissionScalar        = 1.f;
+        sssamtScalar          = 1.f;
+        nChance               = 0.5f;
+        gaussV                = 1.f;
+        clusterMode           = ClusterMode::Disabled;
+        sceneSubdivisions     = 1;
+        restirMode            = ReSTIRMode::InitialCandidates; // ReSTIR Mode
+        enableRestirMap       = false;
     }
     ~PathTracerConfig() = default;
 
-    void setupRp(ph::rt::RayTracingRenderPack::RecordParameters & rp) const {
+    void setupRp(ph::rt::render::PathTracingRenderPack::RecordParameters & rp) const {
         rp.initialCandidateCount = initialCandidateCount;
         rp.jitterAmount          = jitterAmount;
         rp.subsurfaceChance      = subsurfaceChance;

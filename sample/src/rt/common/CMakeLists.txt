@@ -1,5 +1,5 @@
 #############################################################################
-# Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+# Copyright (C) 2020 - 2024 OPPO. All rights reserved.
 ###############################################################################
 
 
@@ -81,23 +81,21 @@ set(sources
     skinning.cpp
     morphtargets.cpp
     fatmesh.cpp
+    scene-graph.cpp
 )
 PH_setup_pch(${sources} PCH_SOURCE pch.cpp)
 
-# Build a object library that does not link to RT shared library. This is to make it easier for test app to
-# choose which RT library, shared or static, to link to later.
-PH_add_library(sample-common-objects ${sources})
+# Build the sample-common library
+PH_add_library(sample-common ${sources})
 if(MSVC)
     # enable c++20 standard for MSVC. So we can use the designated initializer feature.
-    target_compile_features(sample-common-objects PUBLIC cxx_std_20)
+    target_compile_features(sample-common PUBLIC cxx_std_20)
 endif()
-target_compile_definitions(sample-common-objects PRIVATE ASSET_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/../../asset")
-target_include_directories(sample-common-objects PUBLIC
+target_compile_definitions(sample-common PUBLIC ASSET_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/../../asset")
+target_compile_definitions(sample-common PUBLIC SRC_ASSET_FOLDER="${CMAKE_CURRENT_SOURCE_DIR}/../../src/asset")
+target_include_directories(sample-common PUBLIC
     3rdparty/sigslot/include
-    $<TARGET_PROPERTY:physray-rt,INCLUDE_DIRECTORIES> # include RT headers, but not link to it.
+    $<TARGET_PROPERTY:physray-rt-scene,INCLUDE_DIRECTORIES> # include RT-scene headers, but not link to it.
+    $<TARGET_PROPERTY:physray-rt-render,INCLUDE_DIRECTORIES> # include RT headers, but not link to it.
 )
-target_link_libraries(sample-common-objects PUBLIC physray-rps physray-va imgui PRIVATE sample-asset)
-
-# Build the official sample-common library
-PH_add_library(sample-common $<TARGET_OBJECTS:sample-common-objects>)
-target_link_libraries(sample-common PUBLIC sample-common-objects physray-rt)
+target_link_libraries(sample-common PUBLIC physray-rt-scene physray-rt-render physray-rps physray-va imgui PRIVATE sample-asset)

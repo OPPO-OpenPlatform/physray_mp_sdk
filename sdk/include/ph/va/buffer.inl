@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 namespace ph {
@@ -73,10 +77,9 @@ struct BufferObject {
     }
 
     struct AllocParameters {
-        size_t       size_               = 0;
-        const char * name_               = nullptr;
-        uint32_t     extraUsage_         = 0;
-        bool         ignoreVmaAllocator_ = false;
+        size_t       size_       = 0;
+        const char * name_       = nullptr;
+        uint32_t     extraUsage_ = 0;
 
         AllocParameters & size(size_t value) {
             size_ = value;
@@ -90,11 +93,6 @@ struct BufferObject {
 
         AllocParameters & extraUsage(uint32_t value) {
             extraUsage_ = value;
-            return *this;
-        }
-
-        AllocParameters & ignoreVmaAllocator(bool value) {
-            ignoreVmaAllocator_ = value;
             return *this;
         }
     };
@@ -113,7 +111,7 @@ struct BufferObject {
         AutoHandle<VkBuffer> b;
 
         // TODO: Rethink how we're going to map the memory property flags onto the allocation creation usage flags
-        if (g.vmaAllocator && !ap.ignoreVmaAllocator_) {
+        if (g.vmaAllocator) {
             VmaAllocationCreateInfo aci {};
             aci.flags         = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
             aci.requiredFlags = memoryProperties;
@@ -439,15 +437,15 @@ public:
     /// map the cpu buffer and preserve previously filled data.
     MappedResult map() {
         if (_whereTheLatestDataAre != _stagingIndex) {
-            auto mapped = _stagings[_stagingIndex].map<T>();
-            auto source = _stagings[_whereTheLatestDataAre].map<T>();
+            auto mapped = _stagings[_stagingIndex].template map<T>();
+            auto source = _stagings[_whereTheLatestDataAre].template map<T>();
             memcpy(mapped.range.data(), source.range.data(), mapped.range.size() * sizeof(T));
             // since mapped buffers dont have copy constructors, we have to let the mapped buffer again below,
             // This may have a slight performance hit
         }
         _whereTheLatestDataAre = _stagingIndex;
 #if PH_CXX_STANDARD >= 17
-        return _stagings[_stagingIndex].map<T>();
+        return _stagings[_stagingIndex].template map<T>();
 #else
         return ::std::move(_stagings[_stagingIndex].map<T>());
 #endif
@@ -457,7 +455,7 @@ public:
     MappedResult mapDiscard() {
         _whereTheLatestDataAre = _stagingIndex;
 #if PH_CXX_STANDARD >= 17
-        return _stagings[_stagingIndex].map<T>();
+        return _stagings[_stagingIndex].template map<T>();
 #else
         return ::std::move(_stagings[_stagingIndex].map<T>());
 #endif

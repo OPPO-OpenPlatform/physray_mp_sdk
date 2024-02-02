@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 #include <map>
 
@@ -24,22 +28,11 @@ struct DeferredHostOperation {
     }
 
     /// Allocate a shared temporary GPU buffer. The buffer will be release only after GPU operation is done AND all external references are released.
-    auto allocateSharedScratchBuffer(uint64_t size, VkBufferUsageFlags u = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                                     DeviceMemoryUsage m = DeviceMemoryUsage::CPU_ONLY, VkMemoryAllocateFlags a = 0) -> std::shared_ptr<BufferObject> {
-        auto bufferObject = std::make_shared<BufferObject>(u, m, a);
-        bufferObject->allocate(_vgi, size, "shared scratch buffer");
-        auto result = bufferObject;
-        releaseAfterGPUWorkIsDone(std::move(bufferObject));
-        PH_ASSERT(!bufferObject.get());
-        return result;
-    }
-
-    /// Allocate a temporary GPU buffer. The buffer will be automatically released after GPU work is done.
     auto allocateScratchBuffer(uint64_t size, VkBufferUsageFlags u = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                               DeviceMemoryUsage m = DeviceMemoryUsage::CPU_ONLY, VkMemoryAllocateFlags a = 0) -> BufferObject * {
-        auto bufferObject = std::make_unique<BufferObject>(u, m, a);
+                               DeviceMemoryUsage m = DeviceMemoryUsage::CPU_ONLY, VkMemoryAllocateFlags a = 0) -> std::shared_ptr<BufferObject> {
+        auto bufferObject = std::make_shared<BufferObject>(u, m, a);
         bufferObject->allocate(_vgi, size, "scratch buffer");
-        auto result = bufferObject.get();
+        auto result = bufferObject;
         releaseAfterGPUWorkIsDone(std::move(bufferObject));
         PH_ASSERT(!bufferObject.get());
         return result;
@@ -63,6 +56,12 @@ struct DeferredHostOperation {
 
     /// Upload data from CPU to GPU. Note that destOffset is in unit of byte.
     template<typename T>
+    void cmdUploadToGpu(VkCommandBuffer cb, VkBuffer dest, size_t destOffset, const T & source) {
+        return cmdUploadToGpu(cb, dest, destOffset, &source, sizeof(source));
+    }
+
+    /// Upload data from CPU to GPU. Note that destOffset is in unit of byte.
+    template<typename T>
     void cmdUploadToGpu(VkCommandBuffer cb, VkBuffer dest, size_t destOffset, const ConstRange<T> & source) {
         return cmdUploadToGpu(cb, dest, destOffset, source.data(), source.size() * sizeof(T));
     }
@@ -75,7 +74,7 @@ struct DeferredHostOperation {
 
     std::shared_ptr<BufferObject> downloadFromGPU(VkCommandBuffer cb, VkBuffer buffer, size_t offset, size_t size) {
         if (!buffer || !size) return {};
-        auto scratch     = allocateSharedScratchBuffer(size);
+        auto scratch     = allocateScratchBuffer(size);
         auto region      = VkBufferCopy {};
         region.srcOffset = offset;
         region.dstOffset = 0;

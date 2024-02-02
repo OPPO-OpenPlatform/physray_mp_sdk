@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -25,7 +25,7 @@ ph::rt::Material::TextureHandle TextureCache::loadFromAsset(const std::string & 
     // If this asset is already loaded.
     if (iterator != _textureHandles.end()) {
         // Return the entry for it.
-        return ph::rt::toTextureHandle(iterator->second);
+        return ph::rt::Material::TextureHandle(iterator->second);
     }
 
     // Load the image bytes from the asset system.
@@ -46,13 +46,13 @@ ph::rt::Material::TextureHandle TextureCache::loadFromAsset(const std::string & 
     imageObject.createFromImageProxy(assetPath.c_str(), *_vsp, usage, ph::va::DeviceMemoryUsage::GPU_ONLY, asset.content.i.proxy());
 
     // done
-    return ph::rt::toTextureHandle(imageObject);
+    return ph::rt::Material::TextureHandle(imageObject);
 }
 
 std::string TextureCache::getAssetPath(const ph::rt::Material::TextureHandle & textureHandle) {
     auto iterator = _textureHandles.begin();
     while (iterator != _textureHandles.end()) {
-        if (ph::rt::toTextureHandle(iterator->second) == textureHandle) return iterator->first;
+        if (ph::rt::Material::TextureHandle(iterator->second) == textureHandle) return iterator->first;
     }
     return "";
 }
@@ -71,7 +71,7 @@ ph::rt::Material::TextureHandle TextureCache::createFromImageProxy(const ph::Ima
     // load from image proxy
     imageObject.createFromImageProxy("image proxy", *_vsp, VK_IMAGE_USAGE_SAMPLED_BIT, ph::va::DeviceMemoryUsage::GPU_ONLY, imageProxy);
 
-    return ph::rt::toTextureHandle(imageObject);
+    return ph::rt::Material::TextureHandle(imageObject);
 }
 
 ph::rt::Material::TextureHandle TextureCache::createFromImageProxy(const ph::ImageProxy & imageProxy, std::string imageAssetPath) {
@@ -81,7 +81,7 @@ ph::rt::Material::TextureHandle TextureCache::createFromImageProxy(const ph::Ima
     else {
         auto itr = _textureHandles.find(imageAssetPath);
         if (itr != _textureHandles.end())
-            return ph::rt::toTextureHandle(itr->second);
+            return ph::rt::Material::TextureHandle(itr->second);
         else {
             // If the image is empty.
             if (imageProxy.empty()) {
@@ -93,7 +93,7 @@ ph::rt::Material::TextureHandle TextureCache::createFromImageProxy(const ph::Ima
             // load from image proxy
             imageObject.createFromImageProxy("image proxy", *_vsp, VK_IMAGE_USAGE_SAMPLED_BIT, ph::va::DeviceMemoryUsage::GPU_ONLY, imageProxy);
 
-            return ph::rt::toTextureHandle(imageObject);
+            return ph::rt::Material::TextureHandle(imageObject);
         }
     }
 }
@@ -179,7 +179,7 @@ ph::rt::Material::TextureHandle TextureCache::createShadowMap2D(const char * nam
 
     cmdpool.finish(cb);
 
-    return ph::rt::toTextureHandle(shadowMap);
+    return ph::rt::Material::TextureHandle(shadowMap);
 }
 
 ph::rt::Material::TextureHandle TextureCache::createShadowMap2D(const char * name) {
@@ -228,7 +228,7 @@ ph::rt::Material::TextureHandle TextureCache::createShadowMapCube(const char * n
 
     cmdpool.finish(cb);
 
-    return ph::rt::toTextureHandle(shadowMap);
+    return ph::rt::Material::TextureHandle(shadowMap);
 }
 
 ph::rt::Material::TextureHandle TextureCache::createShadowMapCube(const char * name) {

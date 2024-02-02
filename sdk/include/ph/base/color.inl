@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 namespace ph {
 
 ///
@@ -663,6 +667,11 @@ union RGBA8 {
     uint8_t  u8[4];
 
     static RGBA8 make(uint8_t r, uint8_t g = 0, uint8_t b = 0, uint8_t a = 0) { return {{r, g, b, a}}; }
+
+    static RGBA8 make(float r, float g, float b, float a) {
+        return {{static_cast<uint8_t>(clamp(r, 0.f, 1.f) * 255.0f), static_cast<uint8_t>(clamp(g, 0.f, 1.f) * 255.0f),
+                 static_cast<uint8_t>(clamp(b, 0.f, 1.f) * 255.0f), static_cast<uint8_t>(clamp(a, 0.f, 1.f) * 255.0f)}};
+    }
 
     static RGBA8 make(const uint8_t * p) { return {{p[0], p[1], p[2], p[3]}}; }
 

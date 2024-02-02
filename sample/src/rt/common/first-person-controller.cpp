@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -20,7 +20,7 @@ static inline Quaternionf euler(const Vector3f & e) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-/// Limit rotation angle within valid range. This method need to be called everytime _angle is updated.
+/// Limit rotation angle within valid range. This method need to be called every time _angle is updated.
 Eigen::Vector3f FirstPersonController::limitRotationAngle(const Vector3f & a) {
     if (orbiting())
         return {
@@ -297,7 +297,7 @@ void FirstPersonController::flythroughUpdate(float elapsedSeconds) {
     _position = _positionInterp.value();
 
     // Combine everything into view transform.
-    _worldTransform = ph::rt::NodeTransform::Identity();
+    _worldTransform = sg::Transform::Identity();
     _worldTransform.translate(_position);
     _worldTransform.rotate(rotation);
 }
@@ -365,7 +365,7 @@ void FirstPersonController::orbitingUpdate(float elapsedSeconds) {
     _position = _orbitalCenter.value() + Eigen::Vector3f(x, y, z);
 
     // Combine everything into view transform.
-    _worldTransform = ph::rt::NodeTransform::Identity();
+    _worldTransform = sg::Transform::Identity();
     _worldTransform.translate(_position);
     _worldTransform.rotate(rotation);
 }

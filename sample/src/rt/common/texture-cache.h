@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -14,8 +14,6 @@ public:
     TextureCache(ph::va::VulkanSubmissionProxy * vsp, ph::AssetSystem * assetSystem, const VkFormat defaultShadowMapFormat, uint32_t defaultShadowMapSize);
 
     ~TextureCache() = default;
-
-    ph::AssetSystem * getAssetSystem() { return _assetSystem; }
 
     const std::unordered_map<std::string, ph::va::ImageObject> & textures() const { return _textureHandles; }
 

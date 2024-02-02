@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -21,23 +24,13 @@ namespace gltf {
  */
 class GLTFMeshBuilder {
 public:
-    /**
-     * @param scene Used to create new objects.
-     * @param model The tinygltf model who's items are being
-     * instantiated in scene.
-     */
-    GLTFMeshBuilder(ph::rt::Scene * scene, const tinygltf::Model * model, skinning::SkinMap * skinnedMeshes, MorphTargetMap *, SceneBuildBuffers *)
-        : _scene(scene), _model(model), _accessorReader(model), _skinnedMeshes(skinnedMeshes) {} //, _morphTargets(morphTargets), _sbb(sbb) {};
+    GLTFMeshBuilder(const tinygltf::Model * model, skinning::SkinMap * skinnedMeshes, MorphTargetMap *, SceneBuildBuffers *)
+        : _model(model), _accessorReader(model), _skinnedMeshes(skinnedMeshes) {} //, _morphTargets(morphTargets), _sbb(sbb) {};
 
     /**
      *
      */
     virtual ~GLTFMeshBuilder() = default;
-
-    /**
-     * @return The scene used to create new objects.
-     */
-    ph::rt::Scene * getScene() { return _scene; }
 
     /**
      * @return The tinygltf model who's items are being instantiated in scene.
@@ -66,7 +59,7 @@ public:
     };
 
     /**
-     * Converts given primitive to PhysRay equivelant objects.
+     * Converts given primitive to PhysRay equivalent objects.
      * This must be called AFTER convertMaterials().
      * @param primitive The primitive being converted to a PhysRay mesh.
      * @param meshData The mesh data will be saved to if successful
@@ -88,11 +81,6 @@ private:
      * or the list of positions if the accessor didn't reference the min and max.
      */
     static Eigen::AlignedBox3f toAlignedBox(const tinygltf::Accessor & accessor, const StridedBuffer<float> & positions);
-
-    /**
-     * Scene being used to create new lights.
-     */
-    ph::rt::Scene * _scene;
 
     /**
      * The tinygltf model who's items are being instantiated in scene.

@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 namespace ph {
@@ -119,6 +123,7 @@ struct ImageObject {
     AutoHandle<VkDeviceMemory> memory;
     VkImageView                view       = 0; ///< default view of the whole image.
     VkImageViewType            viewType   = VK_IMAGE_VIEW_TYPE_2D;
+    VkSampler                  sampler    = 0;
     VmaAllocation              allocation = 0;
 
     PH_NO_COPY(ImageObject);
@@ -143,6 +148,8 @@ struct ImageObject {
         viewType       = rhs.viewType;
         allocation     = rhs.allocation;
         rhs.allocation = VK_NULL_HANDLE;
+        sampler        = rhs.sampler;
+        rhs.sampler    = VK_NULL_HANDLE;
     }
 
     /// move operator
@@ -158,6 +165,8 @@ struct ImageObject {
         viewType       = rhs.viewType;
         allocation     = rhs.allocation;
         rhs.allocation = VK_NULL_HANDLE;
+        sampler        = rhs.sampler;
+        rhs.sampler    = VK_NULL_HANDLE;
         return *this;
     }
 
@@ -166,10 +175,12 @@ struct ImageObject {
         if (global) {
             global->safeDestroy(image, allocation);
             global->safeDestroy(view);
+            global->safeDestroy(sampler);
         }
         PH_ASSERT(0 == image);
         PH_ASSERT(0 == view);
         PH_ASSERT(0 == allocation);
+        PH_ASSERT(0 == sampler);
         memory.clear();
         global   = 0;
         viewType = VK_IMAGE_VIEW_TYPE_2D;
@@ -188,7 +199,24 @@ struct ImageObject {
     ///
     ImageObject & createFromImageProxy(const char * name, VulkanSubmissionProxy & vsp, VkImageUsageFlags usage, DeviceMemoryUsage memoryUsage,
                                        const ImageProxy & ip);
+
+    /// Immediately reset the whole image into specific layout.
+    void resetLayout(VulkanSubmissionProxy & vsp, VkImageLayout layout);
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+/// A helper function to create a VkImageSubresourceRange for the whole image
+inline constexpr VkImageSubresourceRange wholeImage(VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT) {
+    return {aspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+};
+
+// ---------------------------------------------------------------------------------------------------------------------
+/// A helper function to create a VkImageSubresourceRange that represents the base map of the first face.
+inline constexpr VkImageSubresource firstSubImage(VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT) { return {aspect, 0, 0}; }
+
+// ---------------------------------------------------------------------------------------------------------------------
+/// A helper function to create a VkImageSubresourceRange that represents the base map of the first face.
+inline constexpr VkImageSubresourceRange firstSubImageRange(VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT) { return {aspect, 0, 1, 0, 1}; }
 
 // ---------------------------------------------------------------------------------------------------------------------
 /// Convert ColorFormat to its VK counterpart. Returns VK_FORMAT_UNKNOWN, if the conversion failed.

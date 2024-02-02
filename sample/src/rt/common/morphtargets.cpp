@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -56,7 +56,7 @@ void MorphTargetManager::allocateBuffers(MorphTargetData morphData, MorphTargetB
 
     // Sync the buffers to the gpu
     ph::va::SingleUseCommandPool pool(*_vsp);
-    pool.syncexec([&](auto cb) {
+    pool.syncExec([&](auto cb) {
         morphBuffer.inputVertexBuffer.sync2gpu(cb);
         morphBuffer.outputVertexBuffer.sync2gpu(cb);
         morphBuffer.weightsBuffer.sync2gpu(cb);

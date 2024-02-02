@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -21,18 +21,18 @@ namespace gltf {
 
 static void buildNodeGraph(const tinygltf::Model * model, SceneAsset * sceneAsset) {
     auto & phNodes = sceneAsset->getNodes();
-    auto   phScene = sceneAsset->getMainScene();
+    auto & phGraph = sceneAsset->getMainGraph();
 
     // populate physray node array
     phNodes.resize(model->nodes.size());
     for (size_t i = 0; i < model->nodes.size(); ++i) {
-        phNodes[i] = phScene->createNode({});
+        phNodes[i] = phGraph.createNode({});
 
         // Fetch the local transform of this node.
-        ph::rt::NodeTransform parentToNode;
+        sg::Transform parentToNode;
         JediTypeConverter::toNodeTransform(&model->nodes[i], parentToNode);
         phNodes[i]->setTransform(parentToNode);
-        phNodes[i]->name = ph::rt::StrA(model->nodes[i].name);
+        phNodes[i]->name = std::string(model->nodes[i].name);
     }
 
     // setup node hierarchy.
@@ -42,21 +42,21 @@ static void buildNodeGraph(const tinygltf::Model * model, SceneAsset * sceneAsse
     }
 }
 
-GLTFSceneAssetBuilder::GLTFSceneAssetBuilder(ph::AssetSystem * assetSys, TextureCache * textureCache, ph::rt::Scene * scene, const tinygltf::Model * model,
+GLTFSceneAssetBuilder::GLTFSceneAssetBuilder(ph::AssetSystem * assetSys, TextureCache * textureCache, sg::Graph * graph, const tinygltf::Model * model,
                                              const std::string & assetBaseDirectory, skinning::SkinMap * skinnedMeshes, MorphTargetManager * morphTargetManager,
                                              SceneBuildBuffers * sbb, bool createGeomLights)
-    : _assetSys(assetSys), _textureCache(textureCache), _scene(scene), _model(model), _assetBaseDirectory(assetBaseDirectory), _accessorReader(model),
+    : _assetSys(assetSys), _textureCache(textureCache), _graph(graph), _model(model), _assetBaseDirectory(assetBaseDirectory), _accessorReader(model),
       _skinnedMeshes(skinnedMeshes), _morphTargetManager(morphTargetManager), _sbb(sbb), _createGeomLights(createGeomLights) {
     // convert all of the resource objects first.
     convertResources();
 }
 
-std::shared_ptr<SceneAsset> GLTFSceneAssetBuilder::build(ph::rt::Scene * mainScene) {
+std::shared_ptr<SceneAsset> GLTFSceneAssetBuilder::build() {
     // The result object this will return.
     std::shared_ptr<SceneAsset> sceneAsset {new SceneAsset()};
 
     // Pass the parameters to the results.
-    sceneAsset->setMainScene(mainScene);
+    sceneAsset->setMainGraph(_graph);
 
     // Copy the resources used by sceneasset.
     sceneAsset->getMaterials()       = _materials;
@@ -129,7 +129,7 @@ void GLTFSceneAssetBuilder::convertMaterials(const std::vector<ph::RawImage> & i
     _materials.reserve(_model->materials.size());
 
     // Create a builder to create each material.
-    GLTFMaterialBuilder builder(_textureCache, _scene, _model, &images);
+    GLTFMaterialBuilder builder(_textureCache, &_graph->scene(), _model, &images);
 
     // Iterate materials.
     for (std::size_t materialId = 0; materialId < _model->materials.size(); ++materialId) {
@@ -152,7 +152,7 @@ void GLTFSceneAssetBuilder::convertMeshes() {
     _meshToPrimitives.resize(_model->meshes.size());
 
     // Create the object that will build each mesh.
-    GLTFMeshBuilder builder(_scene, _model, _skinnedMeshes, _morphTargetManager->getMorphTargets(), _sbb);
+    GLTFMeshBuilder builder(_model, _skinnedMeshes, _morphTargetManager->getMorphTargets(), _sbb);
 
     // Iterate all meshes.
     for (std::size_t meshId = 0; meshId < _model->meshes.size(); ++meshId) {
@@ -211,11 +211,11 @@ void GLTFSceneAssetBuilder::convertMeshes() {
 
                 // If conversion failed, fire a warning and skip.
             } else {
-                PH_LOGW("Primitive number %d of mesh %d not supported.", primitiveIndex, meshId);
+                PH_LOGW("Primitive number %zu of mesh %zu not supported.", primitiveIndex, meshId);
             }
         }
 
-        ph::rt::Scene::MeshCreateParameters parameters = {};
+        ph::rt::Mesh::CreateParameters parameters = {};
 
         parameters.vertexCount = meshData.positions.count();
         // parameters.vertices.position.buffer = _sbb->uploadData(meshData.positions.data(), meshData.positions.size());
@@ -270,8 +270,8 @@ void GLTFSceneAssetBuilder::convertMeshes() {
         }
 
         // Create the mesh and save it to the primitives' data
-        PH_DLOGI("Creating mesh %s with %d indices and %d vertices", mesh.name.c_str(), parameters.indexCount, parameters.vertexCount);
-        auto phMesh  = _scene->createMesh(parameters);
+        PH_DLOGI("Creating mesh %s with %zu indices and %zu vertices", mesh.name.c_str(), parameters.indexCount, parameters.vertexCount);
+        auto phMesh  = _graph->world().createMesh(parameters);
         phMesh->name = mesh.name.c_str();
 
         // Check if this primitive has skinning data & add it to _skinnedMeshes if it does
@@ -326,7 +326,7 @@ ph::rt::Material * GLTFSceneAssetBuilder::getDefaultMaterial() {
         // so leave phMaterial.emission at zero.
 
         // Create the material.
-        _defaultMaterial = _scene->createMaterial(phMaterialDesc);
+        _defaultMaterial = _graph->world().createMaterial(phMaterialDesc);
     }
 
     return _defaultMaterial;
@@ -348,12 +348,12 @@ ph::rt::Material * GLTFSceneAssetBuilder::getMaterial(int materialId) {
 
 void GLTFSceneAssetBuilder::connectSceneGraphs(SceneAsset * sceneAsset) {
     // Get the list of all PhysRay nodes.
-    std::vector<ph::rt::Node *> & phNodes = sceneAsset->getNodes();
+    std::vector<sg::Node *> & phNodes = sceneAsset->getNodes();
 
     // Iterate all nodes.
     for (std::size_t nodeId = 0; nodeId < phNodes.size(); ++nodeId) {
         // Get the PhysRay node to be processed.
-        ph::rt::Node * phNode = phNodes[nodeId];
+        sg::Node * phNode = phNodes[nodeId];
 
         // If this node is empty for whatever reason, skip it.
         // This will most likely happen if there were multiple scenes
@@ -379,26 +379,15 @@ void GLTFSceneAssetBuilder::connectSceneGraphs(SceneAsset * sceneAsset) {
     // add generated mesh lights after all existing gltf lights were added to scene asset
     if (_createGeomLights) {
         for (std::size_t geomLightIdx = 0; geomLightIdx < _geomLights.size(); ++geomLightIdx) {
-            std::pair<ph::rt::Node *, ph::rt::Light *> geomLightPair    = _geomLights[geomLightIdx];
-            auto                                       n                = geomLightPair.first;
-            auto                                       l                = geomLightPair.second;
-            ph::rt::Scene &                            scene            = n->scene();
-            bool                                       hasImportedLight = false;
-            bool                                       hasModel         = false;
-            for (auto c : n->components()) {
-                if (c->type() == ph::rt::NodeComponent::Type::LIGHT) {
-                    hasImportedLight = true;
-                    break;
-                } else if (c->type() == ph::rt::NodeComponent::Type::MODEL)
-                    hasModel = true;
-            }
-            if (hasImportedLight || !hasModel) { // for a geom light to be valid, the node must have a model and no other lights
-                scene.deleteLight(l);
+            std::pair<sg::Node *, ph::rt::Light *> geomLightPair = _geomLights[geomLightIdx];
+            auto                                   n             = geomLightPair.first;
+            auto                                   l             = geomLightPair.second;
+            if (n->lightCount() > 1 || 0 == n->modelCount()) { // for a geom light to be valid, the node must have a model and no other lights
+                n->detachComponent(l);
             } else {
                 l->shadowMap = _textureCache->createShadowMapCube("mesh light shadow map");
                 n->attachComponent(l);
-                sceneAsset->getLights().push_back(l);
-                sceneAsset->getNameToLights()[n->name.c_str()].insert(l);
+                sceneAsset->getLights().push_back(n);
             }
         }
 
@@ -408,7 +397,7 @@ void GLTFSceneAssetBuilder::connectSceneGraphs(SceneAsset * sceneAsset) {
     PH_LOGI("GLTF scene constructed: %zu nodes, %zu models", phNodes.size(), sceneAsset->models.size());
 }
 
-void GLTFSceneAssetBuilder::addNodeCamera(SceneAsset * sceneAsset, ph::rt::Node * phNode, int cameraId) {
+void GLTFSceneAssetBuilder::addNodeCamera(SceneAsset * sceneAsset, sg::Node * phNode, int cameraId) {
     // If this node doesn't have a camera, there is nothing to do.
     if (cameraId == -1) { return; }
 
@@ -423,7 +412,7 @@ void GLTFSceneAssetBuilder::addNodeCamera(SceneAsset * sceneAsset, ph::rt::Node 
     sceneAsset->getCameras()[cameraId] = phCamera;
 }
 
-static Eigen::AlignedBox3f calculateWorldSpaceBoundingBox(const ph::rt::NodeTransform & transform, const Eigen::AlignedBox3f bbox) {
+static Eigen::AlignedBox3f calculateWorldSpaceBoundingBox(const sg::Transform & transform, const Eigen::AlignedBox3f bbox) {
     // Total number of corners in a box.
     constexpr size_t cornerCount = 8;
 
@@ -451,7 +440,7 @@ static Eigen::AlignedBox3f calculateWorldSpaceBoundingBox(const ph::rt::NodeTran
     return result;
 }
 
-void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::Node * phNode, const tinygltf::Node & node) {
+void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, sg::Node * phNode, const tinygltf::Node & node) {
     // If this node isn't a mesh, then there is nothing for us to do.
     if (node.mesh == -1) { return; }
 
@@ -459,7 +448,7 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
     bool hasSkin = node.skin != -1;
 
     // The nodes making up this mesh view's skeleton (if it has one).
-    std::vector<ph::rt::Node *> joints;
+    std::vector<sg::Node *> joints;
 
     // The inverse bind matrices corresponding to each joint.
     std::vector<Eigen::Matrix4f> inverseBindMatrices;
@@ -472,7 +461,7 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
         // Fetch all the nodes making up this skin's skeleton.
         for (auto jointNodeId : skin.joints) {
             // Fetch the actual PhysRay node implementing this joint.
-            ph::rt::Node * n = sceneAsset->getNodes()[jointNodeId];
+            sg::Node * n = sceneAsset->getNodes()[jointNodeId];
 
             // Not expecting this to be null.
             PH_REQUIRE(n != nullptr);
@@ -493,7 +482,7 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
             phNode = sceneAsset->getNodes()[skin.skeleton];
         } else {
             // Set world transform to zero so that skinning transforms are applied correctly
-            phNode->setWorldTransform(ph::rt::NodeTransform::make(Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity(), Eigen::Vector3f::Ones()));
+            phNode->setWorldTransform(sg::Transform::make(Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity(), Eigen::Vector3f::Ones()));
         }
     }
 
@@ -505,14 +494,14 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
     Eigen::AlignedBox3f modelBounds;
     modelBounds.setEmpty();
 
-    // Fetch the scene object that will be used as a factory for creating the mesh views.
-    ph::rt::Scene & scene = phNode->scene();
+    // Fetch the world object that will be used as a factory for creating the models.
+    auto & world = _graph->world();
 
     // Get this mesh's list of converted PhysRay meshes.
     std::vector<PrimitiveData> & primitiveDatas = _meshToPrimitives[node.mesh];
 
     if (!primitiveDatas.empty()) {
-        ph::rt::Scene::ModelCreateParameters mcp = {*primitiveDatas[0].mesh, *primitiveDatas[0].subset.material};
+        ph::rt::Model::CreateParameters mcp = {*primitiveDatas[0].mesh, *primitiveDatas[0].subset.material};
 
         // Iterate all primitives in this mesh.
         std::vector<ph::rt::Model::Subset> subsets;
@@ -555,14 +544,15 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
         mcp.subsets = subsets;
 
         // Create a model for this Mesh.
-        auto model = scene.createModel(mcp);
+        auto model = world.createModel(mcp);
         sceneAsset->models.push_back(model);
+        auto modelEntity = phNode->attachComponent(model);
 
         // Create mesh light if applicable.
         if (_createGeomLights && mcp.material.desc().isLight()) {
-            ph::rt::Light * light     = scene.createLight({});
-            const float *   emission  = &mcp.material.desc().emission[0];
-            ph::rt::Float3  emission3 = ph::rt::Float3::make(emission[0], emission[1], emission[2]);
+            ph::rt::Light * light    = world.createLight({});
+            const float *   emission = &mcp.material.desc().emission[0];
+            Eigen::Vector3f emission3(emission);
 
             // Since instance index is only set up after scene is able to traverse the node graph,
             // only the model pointer is set up in the CPU light data. Then, when scene processes lights,
@@ -582,15 +572,12 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
                              .setEmission(emission3)
                              .setRange(range)
                              .setDimension(dimensions.x(), dimensions.y(), dimensions.z())
-                             .setGeom(ph::rt::Light::Geom()));
+                             .setGeom({modelEntity}));
 
             // Since node extension lights must be added first and in an order corresponding to their light ID,
             // store mesh lights in a separate array to be appended afterwards.
             _geomLights.emplace_back(std::pair(phNode, light));
         }
-
-        // Since node graph traversal stops when a model is encountered, the light component must be added before the model.
-        phNode->attachComponent(model);
 
         // set bbox as model data
         auto guidBBOX = Guid::make(0x0, 0x0);
@@ -602,7 +589,7 @@ void GLTFSceneAssetBuilder::addMeshPrimitives(SceneAsset * sceneAsset, ph::rt::N
     }
 }
 
-void GLTFSceneAssetBuilder::processNodeExtensions(SceneAsset * sceneAsset, ph::rt::Node * phNode, const tinygltf::Node & node) {
+void GLTFSceneAssetBuilder::processNodeExtensions(SceneAsset * sceneAsset, sg::Node * phNode, const tinygltf::Node & node) {
     // Iterate all of this node's extensions.
     for (auto & nameToValue : node.extensions) {
         // If this is the light extension.
@@ -621,7 +608,7 @@ void GLTFSceneAssetBuilder::processNodeExtensions(SceneAsset * sceneAsset, ph::r
     }
 }
 
-void GLTFSceneAssetBuilder::addNodeLight(SceneAsset * sceneAsset, ph::rt::Node * phNode, int lightId) {
+void GLTFSceneAssetBuilder::addNodeLight(SceneAsset * sceneAsset, sg::Node * phNode, int lightId) {
     // If this node doesn't have a light, there is nothing to do.
     if (lightId == -1) { return; }
 
@@ -637,13 +624,10 @@ void GLTFSceneAssetBuilder::addNodeLight(SceneAsset * sceneAsset, ph::rt::Node *
     // for all nodes.
     if (phLight) {
         if (sceneAsset->getLights()[lightId]) {
-            sceneAsset->getLights().push_back(phLight);
+            sceneAsset->getLights().push_back(phNode);
         } else {
-            sceneAsset->getLights()[lightId] = phLight;
+            sceneAsset->getLights()[lightId] = phNode;
         }
-
-        // Save the light to its name.
-        sceneAsset->getNameToLights()[light.name].insert(phLight);
     }
 }
 

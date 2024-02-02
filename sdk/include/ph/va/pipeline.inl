@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 namespace ph {
 namespace va {
 
@@ -87,13 +91,13 @@ struct SimplePipelineCreateInfo {
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         {},
         {},
-        true,                                                                               // depthTestEnable
-        true,                                                                               // depthWriteEnable
-        VK_COMPARE_OP_LESS_OR_EQUAL,                                                        // depthCompareOp
-        false,                                                                              // depthBoundTestEnable
-        false,                                                                              // stencilTestEnable
-        {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS}, // stencil front
-        {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS}, // stencil back
+        true,                                                                                              // depthTestEnable
+        true,                                                                                              // depthWriteEnable
+        VK_COMPARE_OP_LESS_OR_EQUAL,                                                                       // depthCompareOp
+        false,                                                                                             // depthBoundTestEnable
+        false,                                                                                             // stencilTestEnable
+        {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS, 0xFF, 0xFF, 0}, // stencil front
+        {VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_STENCIL_OP_KEEP, VK_COMPARE_OP_ALWAYS, 0xFF, 0xFF, 0}, // stencil back
     };
 
     SimplePipelineCreateInfo & enableDepth() {
@@ -116,6 +120,35 @@ struct SimplePipelineCreateInfo {
         return *this;
     }
 
+    SimplePipelineCreateInfo & resetStencilOp(bool enabled) {
+        depthState.stencilTestEnable = enabled;
+        depthState.front.failOp      = VK_STENCIL_OP_KEEP;
+        depthState.front.passOp      = VK_STENCIL_OP_KEEP;
+        depthState.front.depthFailOp = VK_STENCIL_OP_KEEP;
+        depthState.front.compareOp   = VK_COMPARE_OP_ALWAYS;
+        depthState.front.compareMask = 0xFF;
+        depthState.front.writeMask   = 0xFF;
+        depthState.front.reference   = 0;
+        depthState.back.failOp       = VK_STENCIL_OP_KEEP;
+        depthState.back.passOp       = VK_STENCIL_OP_KEEP;
+        depthState.back.depthFailOp  = VK_STENCIL_OP_KEEP;
+        depthState.back.compareOp    = VK_COMPARE_OP_ALWAYS;
+        depthState.back.compareMask  = 0xFF;
+        depthState.back.writeMask    = 0xFF;
+        depthState.back.reference    = 0;
+        return *this;
+    }
+
+    SimplePipelineCreateInfo & enableStencil() {
+        depthState.stencilTestEnable = true;
+        return *this;
+    }
+
+    SimplePipelineCreateInfo & disableStencil() {
+        depthState.stencilTestEnable = false;
+        return *this;
+    }
+
     /// blend is disabled by default.
     VkPipelineColorBlendAttachmentState attachmentBlendStates[8] {blend(false), blend(false), blend(false), blend(false),
                                                                   blend(false), blend(false), blend(false), blend(false)};
@@ -130,8 +163,13 @@ struct SimplePipelineCreateInfo {
         {1.0f, 1.0f, 1.0f, 1.0f} // blendConstants
     };
 
-    SimplePipelineCreateInfo & enableBlend(uint32_t stage = 0) {
+    SimplePipelineCreateInfo & enableAlphaBlend(uint32_t stage = 0) {
         attachmentBlendStates[stage] = blend(true);
+        return *this;
+    }
+
+    SimplePipelineCreateInfo & enableAdditiveBlend(uint32_t stage = 0) {
+        attachmentBlendStates[stage] = additiveBlend();
         return *this;
     }
 
@@ -179,6 +217,17 @@ private:
                 VK_BLEND_FACTOR_ONE,                 // dstAlphaBlendFactor
                 VK_BLEND_OP_ADD,                     // alphaBlendOp
                 VK_COLOR_COMPONENT_R_BIT |           // colorWriteMask
+                    VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT};
+    }
+    static VkPipelineColorBlendAttachmentState additiveBlend() {
+        return {true,                      // blendEnable
+                VK_BLEND_FACTOR_ONE,       // srcColorBlendFactor
+                VK_BLEND_FACTOR_ONE,       // dstColorBlendFactor
+                VK_BLEND_OP_ADD,           // colorBlendOp
+                VK_BLEND_FACTOR_ONE,       // srcAlphaBlendFactor
+                VK_BLEND_FACTOR_ONE,       // dstAlphaBlendFactor
+                VK_BLEND_OP_ADD,           // alphaBlendOp
+                VK_COLOR_COMPONENT_R_BIT | // colorWriteMask
                     VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT};
     }
 };

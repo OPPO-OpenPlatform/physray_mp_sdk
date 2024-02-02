@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 namespace ph {

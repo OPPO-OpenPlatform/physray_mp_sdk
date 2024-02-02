@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-scene-reader.h"
 #include "gltf/animations/gltf-animation-builder.h"
@@ -9,10 +12,10 @@
 #include "gltf/physray-type-converter.h"
 #include <filesystem>
 
-GLTFSceneReader::GLTFSceneReader(ph::AssetSystem * assetSystem, TextureCache * textureCache, ph::rt::World * world, ph::rt::Scene * mainScene,
-                                 skinning::SkinMap * skinnedMeshes, MorphTargetManager * morphTargetManager, SceneBuildBuffers * sbb, bool createGeomLights)
-    : _assetSystem(assetSystem), _textureCache(textureCache), _world(world), _mainScene(mainScene), _skinnedMeshes(skinnedMeshes),
-      _morphTargetManager(morphTargetManager), _sbb(sbb), _createGeomLights(createGeomLights) {
+GLTFSceneReader::GLTFSceneReader(ph::AssetSystem * assetSystem, TextureCache * textureCache, sg::Graph * graph, skinning::SkinMap * skinnedMeshes,
+                                 MorphTargetManager * morphTargetManager, SceneBuildBuffers * sbb, bool createGeomLights)
+    : _assetSystem(assetSystem), _textureCache(textureCache), _mainGraph(graph), _skinnedMeshes(skinnedMeshes), _morphTargetManager(morphTargetManager),
+      _sbb(sbb), _createGeomLights(createGeomLights) {
     //
 }
 
@@ -71,7 +74,7 @@ std::shared_ptr<const SceneAsset> GLTFSceneReader::read(const std::string & asse
     // Holds the loaded gltf model.
     tinygltf::Model model;
 
-    // These variables record any problems that occured while loading.
+    // These variables record any problems that occurred while loading.
     std::string err;
     std::string warn;
 
@@ -94,19 +97,19 @@ std::shared_ptr<const SceneAsset> GLTFSceneReader::read(const std::string & asse
     if (warn.size() > 0) { PH_LOGW("[GLTF] %s", warn.c_str()); }
 
     // If there was an error, throw it.
-    if (err.size() > 0) { PH_THROW(err.c_str()); }
+    if (err.size() > 0) { PH_THROW("%s", err.c_str()); }
 
     if (!success) { PH_THROW("failed to GLTF file %s", assetPath.c_str()); }
 
-    // If operation was successful, convert it to the equivelant objects for the PhysRay SDK.
+    // If operation was successful, convert it to the equivalent objects for the PhysRay SDK.
     // Create a builder to hold all the variables needed to generate the PhysRay objects.
     PH_LOGI("[GLTF] Constructing GLTF scene builder....");
-    gltf::GLTFSceneAssetBuilder sceneBuilder(_assetSystem, _textureCache, _mainScene, &model, assetBaseDirectory, _skinnedMeshes, _morphTargetManager, _sbb,
+    gltf::GLTFSceneAssetBuilder sceneBuilder(_assetSystem, _textureCache, _mainGraph, &model, assetBaseDirectory, _skinnedMeshes, _morphTargetManager, _sbb,
                                              _createGeomLights);
 
     // Generate all of the available scenes and fetch the result.
     PH_LOGI("[GLTF] Building scene graph....");
-    std::shared_ptr<SceneAsset> sceneAsset = sceneBuilder.build(_mainScene);
+    std::shared_ptr<SceneAsset> sceneAsset = sceneBuilder.build();
 
     // Create a builder to convert all the animations.
     gltf::animations::GLTFAnimationBuilder animationBuilder(&model, sceneAsset, _morphTargetManager);

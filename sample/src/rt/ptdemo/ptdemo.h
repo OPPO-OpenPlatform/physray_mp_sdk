@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -16,6 +16,7 @@
 using namespace ph;
 using namespace ph::va;
 using namespace ph::rt;
+using namespace ph::rt::render;
 
 static const char quad_vs[] = R"glsl(
 #version 420
@@ -40,7 +41,7 @@ static const char flash_fs[] = R"glsl(
 )glsl";
 
 struct PathTracerDemo : ModelViewer {
-    rt::Node *mesh1 = nullptr, *mesh2 = nullptr, *mesh3 = nullptr, *light = nullptr;
+    sg::Node *mesh1 = nullptr, *mesh2 = nullptr, *mesh3 = nullptr, *light = nullptr;
 
     /////////////////////
     // Day/night textures
@@ -56,15 +57,15 @@ struct PathTracerDemo : ModelViewer {
     const ph::va::ImageObject * ngtDiffImg;
     ph::va::ImageObject         dynReflImg;
     ph::va::ImageObject         dynDiffImg;
-    bool                        isDay        = true;
-    bool                        skyboxIsDay  = false;
-    rt::Node *                  fireflyNode  = nullptr;
-    rt::Node *                  light0Node   = nullptr;
-    rt::Light *                 fireflyLight = nullptr;
-    rt::Light *                 mainLight    = nullptr;
+    bool                        isDay         = true;
+    bool                        skyboxIsDay   = false;
+    sg::Node *                  fireflyNode   = nullptr;
+    sg::Node *                  light0Node    = nullptr;
+    rt::Light *                 fireflyLight  = nullptr;
+    sg::Node *                  mainLightNode = nullptr;
     Eigen::Vector3f             fireflyScaling;
-    rt::Node *                  bodyNode    = nullptr;
-    rt::Node *                  dropletNode = nullptr;
+    sg::Node *                  bodyNode    = nullptr;
+    sg::Node *                  dropletNode = nullptr;
     Eigen::Vector3f             dropletScaling;
     rt::Material *              lakeMat = nullptr;
 
@@ -73,9 +74,9 @@ struct PathTracerDemo : ModelViewer {
     ///////////
     /// Procedural headturn
     struct LookAtParams {
-        rt::Node *      joint;
-        NodeTransform   origParentToWorld;
-        NodeTransform   origLocalToParent;
+        sg::Node *      joint;
+        sg::Transform   origParentToWorld;
+        sg::Transform   origLocalToParent;
         Eigen::Vector3f thetaAxis; // Represents the direction of the visual mesh Y axis relative to the joint Y axis
         float           thetaOffset;
         float           phiOffset;
@@ -225,10 +226,10 @@ struct PathTracerDemo : ModelViewer {
             enableDebugGeometry = true;
 #if defined(__ANDROID__)
             rpmode     = RenderPackMode::FAST_PT;
-            shadowMode = ph::rt::RayTracingRenderPack::ShadowMode::RAY_TRACED;
+            shadowMode = ph::rt::render::NoiseFreeRenderPack::ShadowMode::RAY_TRACED;
 #else
-            rpmode     = RenderPackMode::PATH_TRACING;
-            shadowMode = ph::rt::RayTracingRenderPack::ShadowMode::RAY_TRACED;
+            rpmode     = RenderPackMode::PT;
+            shadowMode = ph::rt::render::NoiseFreeRenderPack::ShadowMode::RAY_TRACED;
 #endif
         }
     };
@@ -250,8 +251,15 @@ struct PathTracerDemo : ModelViewer {
     }
 
     bool videoComplete() { return finishedVideo; }
-    bool frameComplete() { return recordParameters.accum == ph::rt::RayTracingRenderPack::Accumulation::RETAIN; }
-    void toggleRpMode() { setRpMode((options.rpmode != ptMode) ? ptMode : Options::RenderPackMode::NOISE_FREE); }
+    bool frameComplete() { return recordParameters.accum == ph::rt::render::PathTracingRenderPack::Accumulation::RETAIN; }
+    void toggleRpMode() {
+        if (options.rpmode != ptMode)
+            options.rpmode = ptMode;
+        else
+            options.rpmode = Options::RenderPackMode::NOISE_FREE;
+        _renderPackDirty = true;
+        recreateMainRenderPack();
+    }
 
     void createPipelines() {
 
@@ -300,7 +308,7 @@ struct PathTracerDemo : ModelViewer {
         auto                              width    = sw().initParameters().width;
         auto                              height   = sw().initParameters().height;
         VkViewport                        viewport = {0, 0, (float) width, (float) height, 0.0f, 1.0f};
-        auto                              scissor  = ph::va::util::rect2d(width, height, 0, 0);
+        auto                              scissor  = VkRect2D {{0, 0}, {width, height}};
         VkPipelineViewportStateCreateInfo viewportState {};
         viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
@@ -375,19 +383,6 @@ struct PathTracerDemo : ModelViewer {
         PH_VA_REQUIRE(vkCreateGraphicsPipelines(vgi.device, VK_NULL_HANDLE, 1, &pipelineCi, vgi.allocator, &_flashPipeline));
     }
 
-    void getRenderedImage(const ph::rt::RayTracingRenderPack::RecordParameters & rp, VkImage & copyTo) {
-        ph::va::setImageLayout(rp.commandBuffer, rp.targetImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-        ph::va::setImageLayout(rp.commandBuffer, copyTo, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                               {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
-        VkImageCopy copyRegion = {{VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                  {0, 0, 0},
-                                  {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                                  {0, 0, 0},
-                                  {sw().initParameters().width, sw().initParameters().height, 1}};
-        vkCmdCopyImage(rp.commandBuffer, rp.targetImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, copyTo, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
-    }
-
     void setupAnimations(std::vector<std::shared_ptr<::animations::Timeline>> & animVector) {
         // These are the animations for day-active
         if (!idleEnabled && isDay) {
@@ -398,7 +393,7 @@ struct PathTracerDemo : ModelViewer {
             }
             // Unhide droplet
             if (dropletNode) {
-                ph::rt::NodeTransform tfm = dropletNode->worldTransform();
+                sg::Transform tfm = dropletNode->worldTransform();
                 tfm.setScaling(dropletScaling);
                 dropletNode->setWorldTransform(tfm);
             }
@@ -503,7 +498,7 @@ struct PathTracerDemo : ModelViewer {
         // FINDINGS: Eigen storage data array stores its data row major
         // (copying from index 0 through size will fill in rows first, then columns)
         // FINDINGS: decomposing to position, rotation, scale at 4 significant decimals
-        // will not reconstruct the same matrix using NodeTransform::make
+        // will not reconstruct the same matrix using sg::Transform::make
         // so I found it faster to just debug and copy the values from vscode's
         // watch window (shift-select all array values)
         Eigen::Matrix<float, 3, 4> m;
@@ -566,25 +561,24 @@ struct PathTracerDemo : ModelViewer {
                 fireflyLight->reset(fld);
                 fireflyNode->detachComponent(fireflyLight);
                 // Hide firefly mesh
-                ph::rt::NodeTransform tfm = fireflyNode->worldTransform();
+                sg::Transform tfm = fireflyNode->worldTransform();
                 tfm.setScaling(Eigen::Vector3f::Zero());
                 fireflyNode->setWorldTransform(tfm);
                 light0Node->attachComponent(fireflyLight);
-                light0Node->setWorldTransform(ph::rt::NodeTransform::make(Eigen::Vector3f(0.05f, 0.84f, 0.19f),
-                                                                          Eigen::Quaternionf(0.0f, 0.9956f, 0.0f, 0.0941f), Eigen::Vector3f::Identity()));
-                if (debugManager) debugManager->updateDebugLight(fireflyLight);
+                light0Node->setWorldTransform(
+                    sg::Transform::make(Eigen::Vector3f(0.05f, 0.84f, 0.19f), Eigen::Quaternionf(0.0f, 0.9956f, 0.0f, 0.0941f), Eigen::Vector3f::Identity()));
+                if (debugManager) debugManager->updateDebugLight(light0Node);
             }
-            if (mainLight) {
+            if (mainLightNode) {
                 // Setup lights
                 // daylight
-
-                rt::Node *      lightNode = mainLight->nodes()[0];
                 Eigen::Vector3f lightScaling;
-                ph::rt::NodeTransform(lightNode->worldTransform()).decompose(nullptr, nullptr, &lightScaling);
-                rt::NodeTransform lightTfm = rt::NodeTransform::make(Eigen::Vector3f(24.f, 11.2f, -36.9f), Eigen::Quaternionf(0.094f, 0.005f, 0.994f, -0.056f),
-                                                                     lightScaling); //
-                lightNode->setWorldTransform(lightTfm);
+                sg::Transform(mainLightNode->worldTransform()).decompose(nullptr, nullptr, &lightScaling);
+                sg::Transform lightTfm = sg::Transform::make(Eigen::Vector3f(24.f, 11.2f, -36.9f), Eigen::Quaternionf(0.094f, 0.005f, 0.994f, -0.056f),
+                                                             lightScaling); //
+                mainLightNode->setWorldTransform(lightTfm);
 
+                auto mainLight         = mainLightNode->light();
                 auto lightDesc         = mainLight->desc();
                 lightDesc.type         = Light::DIRECTIONAL;
                 lightDesc.dimension[0] = -0.5f; // directional for now
@@ -604,7 +598,7 @@ struct PathTracerDemo : ModelViewer {
                 lightDesc.directional.setDir(direction.x(), direction.y(), direction.z());
                 lightDesc.allowShadow = true;
                 mainLight->reset(lightDesc);
-                if (debugManager) debugManager->updateDebugLight(mainLight);
+                if (debugManager) debugManager->updateDebugLight(mainLightNode);
             }
         } else {
             if (fireflyLight) {
@@ -629,24 +623,24 @@ struct PathTracerDemo : ModelViewer {
                 light0Node->detachComponent(fireflyLight);
                 fireflyNode->attachComponent(fireflyLight);
                 // Unhide firefly mesh
-                ph::rt::NodeTransform tfm = fireflyNode->worldTransform();
+                sg::Transform tfm = fireflyNode->worldTransform();
                 tfm.setScaling(fireflyScaling);
                 fireflyNode->setWorldTransform(tfm);
-                if (debugManager) debugManager->updateDebugLight(fireflyLight);
+                if (debugManager) debugManager->updateDebugLight(fireflyNode);
             }
-            if (mainLight) {
+            if (mainLightNode) {
                 // Setup lights
                 // moonlight
                 // position: -15.43, 2.05, -0.22
                 // rotation: 0.094, 0.005, 0.994, -0.056
                 // in direction (-1, 0, 1)
-                rt::Node *      lightNode = mainLight->nodes()[0];
                 Eigen::Vector3f lightScaling;
-                ph::rt::NodeTransform(lightNode->worldTransform()).decompose(nullptr, nullptr, &lightScaling);
-                rt::NodeTransform lightTfm =
-                    rt::NodeTransform::make(Eigen::Vector3f(-84.484f, 8.621f, -3.020f), Eigen::Quaternionf(-0.056f, 0.094f, 0.005f, 0.994f), lightScaling);
-                lightNode->setWorldTransform(lightTfm);
+                sg::Transform(mainLightNode->worldTransform()).decompose(nullptr, nullptr, &lightScaling);
+                sg::Transform lightTfm =
+                    sg::Transform::make(Eigen::Vector3f(-84.484f, 8.621f, -3.020f), Eigen::Quaternionf(-0.056f, 0.094f, 0.005f, 0.994f), lightScaling);
+                mainLightNode->setWorldTransform(lightTfm);
 
+                auto mainLight = mainLightNode->light();
                 auto ld        = mainLight->desc();
                 ld.allowShadow = false;
                 if (options.rpmode == Options::RenderPackMode::NOISE_FREE) {
@@ -671,7 +665,7 @@ struct PathTracerDemo : ModelViewer {
                     ld.range = 140.f;
                 }
                 mainLight->reset(ld);
-                if (debugManager) debugManager->updateDebugLight(mainLight);
+                if (debugManager) debugManager->updateDebugLight(mainLightNode);
             }
         }
     }
@@ -789,8 +783,8 @@ struct PathTracerDemo : ModelViewer {
                               .setLayers(dayDiffImg->ci.arrayLayers)
                               .setLevels(dayDiffImg->ci.mipLevels)
                               .setUsage(usage));
-        dynReflMap = Material::TextureHandle(dynReflImg);
-        dynDiffMap = Material::TextureHandle(dynDiffImg);
+        dynReflMap = dynReflImg;
+        dynDiffMap = dynDiffImg;
     }
 
     void copySkybox(VkCommandBuffer cb = VK_NULL_HANDLE) {
@@ -862,7 +856,7 @@ struct PathTracerDemo : ModelViewer {
 
     PathTracerDemo(SimpleApp & app, const Options & o): ModelViewer(app, o), _options(o) {
         std::string model;
-        if (o.rpmode == Options::RenderPackMode::PATH_TRACING)
+        if (o.rpmode == Options::RenderPackMode::PT)
             model = "model/ptdemo/desktop/scene.gltf";
         else
             model = "model/ptdemo/mobile/scene.gltf";
@@ -871,10 +865,9 @@ struct PathTracerDemo : ModelViewer {
         ptConfig.restirMode            = _options.restirM > 0 ? PathTracerConfig::ReSTIRMode::InitialCandidates : PathTracerConfig::ReSTIRMode::Off;
 
         if (_options.outputVideo)
-            ptMode = Options::RenderPackMode::PATH_TRACING;
-        else {
-            ptMode = o.rpmode == Options::RenderPackMode::PATH_TRACING ? Options::RenderPackMode::PATH_TRACING : Options::RenderPackMode::FAST_PT;
-        }
+            ptMode = Options::RenderPackMode::PT;
+        else
+            ptMode = o.rpmode == Options::RenderPackMode::PT ? Options::RenderPackMode::PT : Options::RenderPackMode::FAST_PT;
 
         // determine model path
         auto modelPath = std::filesystem::path(model);
@@ -914,52 +907,53 @@ struct PathTracerDemo : ModelViewer {
         }
 
         if (fireflyNode) {
-            const ph::rt::NodeTransform & tfm = fireflyNode->worldTransform();
+            const sg::Transform & tfm = fireflyNode->worldTransform();
             tfm.decompose(nullptr, nullptr, &fireflyScaling);
 
-            for (auto c : fireflyNode->components())
-                if (c->type() == ph::rt::NodeComponent::Type::LIGHT) fireflyLight = (ph::rt::Light *) c;
+            fireflyNode->forEachLight([&](ph::rt::Light * light, auto) { fireflyLight = light; });
 
             if (fireflyLight == nullptr) {
                 if (lights.size() > 0) {
-                    fireflyLight = lights[0];
+                    light0Node = lights[0];
                 } else {
-                    fireflyLight = addPointLight(Eigen::Vector3f::Zero(), 2.f, Eigen::Vector3f::Zero(), 0.f, 0.f);
+                    light0Node = addPointLight(Eigen::Vector3f::Zero(), 2.f, Eigen::Vector3f::Zero(), 0.f, 0.f);
                 }
-                light0Node = *(fireflyLight->nodes().begin());
+                fireflyLight = light0Node->light();
             } else {
                 // disable light 0 since we are using the generated mesh light
                 if (lights.size() > 0) {
-                    lights[0]->reset(ph::rt::Light::Desc().setType(ph::rt::Light::Type::OFF).setEmission(0.f, 0.f, 0.f));
-                    light0Node = *(lights[0]->nodes().begin());
+                    lights[0]->light()->reset(ph::rt::Light::Desc().setType(ph::rt::Light::Type::OFF).setEmission(0.f, 0.f, 0.f));
+                    light0Node = lights[0];
                 } else {
                     // create a separate node to separately transform the fill light
-                    light0Node       = scene->createNode({});
+                    light0Node       = graph->createNode({});
                     light0Node->name = "fillLightNode0";
                 }
             }
         }
 
         if (lights.size() > 1) {
-            mainLight = lights[1];
-            // convert mainlight to directional
+            mainLightNode  = lights[1];
+            auto mainLight = mainLightNode->light();
+            // convert main light to directional
             mainLight->reset(ph::rt::Light::Desc().setDirectional(ph::rt::Light::Directional().setDir(0.f, 0.f, 1.f)));
             mainLight->shadowMap = textureCache->createShadowMap2D("ptdemo main light");
         }
 
-        for (auto l : lights) { // disable all other lights
-            if ((l != fireflyLight) && (l != mainLight)) {
+        for (auto n : lights) { // disable all other lights
+            auto l = n->light();
+            if ((l != fireflyLight) && (n != mainLightNode)) {
                 auto ld = l->desc();
                 ld.setType(ph::rt::Light::Type::OFF);
                 ld.emission[0] = ld.emission[1] = ld.emission[2] = 0.f;
                 ld.range                                         = 0.f;
                 l->reset(ld);
-                if (debugManager) debugManager->updateDebugLight(l);
+                if (debugManager) debugManager->updateDebugLight(n);
             }
         }
 
         if (dropletNode) {
-            const ph::rt::NodeTransform & tfm = dropletNode->worldTransform();
+            const sg::Transform & tfm = dropletNode->worldTransform();
             tfm.decompose(nullptr, nullptr, &dropletScaling);
         }
 
@@ -1131,7 +1125,7 @@ struct PathTracerDemo : ModelViewer {
         _leafSsc.setSubsurfaceMaterial(scene, textureCache);
 
         // Grab lake material to set up uv animation later
-        ph::rt::Blob<ph::rt::Material *> mats = scene->materials();
+        std::vector<ph::rt::Material *> mats = world->materials();
         for (auto mat : mats) {
             if (mat->name == "lake") {
                 lakeMat = mat;
@@ -1162,6 +1156,9 @@ struct PathTracerDemo : ModelViewer {
         ph::va::threadSafeDeviceWaitIdle(vgi.device);
         vgi.safeDestroy(_flashPipeline);
         vgi.safeDestroy(_pipelineLayout);
+        safeDelete(snapshotRenderPack);
+        safeDelete(debugPtRenderPack);
+        pathTracingRenderPack = nullptr;
     }
 
 private:
@@ -1175,10 +1172,10 @@ private:
     }
 
     void jointLookAt(LookAtParams & laParams, Eigen::Vector3f camPos, bool isSetup = false) {
-        rt::NodeTransform localToWorld = (laParams.origParentToWorld * laParams.origLocalToParent);
-        Eigen::Matrix4f   worldToLocal = localToWorld.matrix4f().inverse();
-        Eigen::Vector4f   camPosLocal  = (worldToLocal * Eigen::Vector4f(camPos.x(), camPos.y(), camPos.z(), 1.0f));
-        Eigen::Vector3f   lookAtLocal(camPosLocal.x(), camPosLocal.y(), camPosLocal.z());
+        sg::Transform   localToWorld = (laParams.origParentToWorld * laParams.origLocalToParent);
+        Eigen::Matrix4f worldToLocal = localToWorld.matrix4f().inverse();
+        Eigen::Vector4f camPosLocal  = (worldToLocal * Eigen::Vector4f(camPos.x(), camPos.y(), camPos.z(), 1.0f));
+        Eigen::Vector3f lookAtLocal(camPosLocal.x(), camPosLocal.y(), camPosLocal.z());
         lookAtLocal.normalize();
 
         // The local Z axis captures the horizontal displacement of the camera from the local forward vector.
@@ -1204,7 +1201,7 @@ private:
             }
         }
 
-        rt::NodeTransform  localTfm = laParams.origLocalToParent;
+        sg::Transform      localTfm = laParams.origLocalToParent;
         Eigen::Quaternionf localRotation;
         localTfm.decompose(nullptr, &localRotation, nullptr);
         Eigen::Vector3f    localAxis           = laParams.thetaAxis.normalized();
@@ -1254,7 +1251,7 @@ protected:
             PH_REQUIRE(leftEyeParams.joint);
             PH_REQUIRE(rightEyeParams.joint);
             Eigen::Vector3f camPos;
-            ph::rt::NodeTransform(cameras[selectedCameraIndex].node->worldTransform()).decompose(&camPos, nullptr, nullptr);
+            sg::Transform(cameras[selectedCameraIndex].node->worldTransform()).decompose(&camPos, nullptr, nullptr);
             jointLookAt(neckParams, camPos);
 
             // Eyes require updated transform from neck turn
@@ -1268,7 +1265,7 @@ protected:
         }
 
         if (idleEnabled && dropletNode) { // hide second droplet
-            ph::rt::NodeTransform tfm = dropletNode->worldTransform();
+            sg::Transform tfm = dropletNode->worldTransform();
             tfm.setScaling(Eigen::Vector3f::Zero());
             dropletNode->setWorldTransform(tfm);
         }
@@ -1319,7 +1316,7 @@ public:
     }
 
     void saveSnapshotAccumComplete() {
-        if (saveSnapshotWhenReady && (recordParameters.accum == RayTracingRenderPack::Accumulation::RETAIN)) {
+        if (saveSnapshotWhenReady && (recordParameters.accum == PathTracingRenderPack::Accumulation::RETAIN)) {
             threadSafeDeviceWaitIdle(dev().vgi().device);
             saveSnapshotWhenReady = false;
             ph::RawImage snapshot = readBaseImagePixels(dev().graphicsQ(), _accumulatedImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -1340,13 +1337,22 @@ public:
     }
 
     void saveSnapshot() {
-        if (recordParameters.accum != RayTracingRenderPack::Accumulation::OFF) saveSnapshotWhenReady = true;
+        if (recordParameters.accum != PathTracingRenderPack::Accumulation::OFF) saveSnapshotWhenReady = true;
+    }
+
+    /// call this before calling record to ensure that the first frame draws without a hitch.
+    /// record parameters must have a valid scene and command buffer.
+    template<typename RenderPack>
+    void preloadPipelines(RenderPack * r, VkCommandBuffer cb) {
+        graph->refreshSceneGpuData(cb);
+        auto desc = scene->descriptors(cb, true);
+        r->reconstructPipelines(desc.layout);
     }
 
     void recordOffscreenPass(const PassParameters & p) override {
         copySkybox();
         if (!debugPt) {
-            bool beginSnapshot = snapshot && (options.rpmode == ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE);
+            bool beginSnapshot = snapshot && (options.rpmode == Options::RenderPackMode::NOISE_FREE);
 
             if (snapshot) {
                 // Switch from one rpmode to the other
@@ -1356,11 +1362,11 @@ public:
                     setAnimated(false);
 
                     // Reset accumulation
-                    recordParameters.accum = RayTracingRenderPack::Accumulation::OFF;
+                    recordParameters.accum = PathTracingRenderPack::Accumulation::OFF;
                     _lastCameraPosition    = Eigen::Vector3f::Constant(Eigen::Infinity);
                     _lastCameraRotation    = Eigen::Vector3f::Constant(Eigen::Infinity);
                 } else {
-                    options.rpmode   = ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE;
+                    options.rpmode   = Options::RenderPackMode::NOISE_FREE;
                     options.animated = true;
                     setAnimated(true);
                 }
@@ -1372,28 +1378,28 @@ public:
                 setSnapshot(false);
             }
         }
-        recordParameters.commandBuffer = p.cb;
-        recordParameters.scene         = scene;
 
         ModelViewer::recordOffscreenPass(p);
 
         // constantly update pipelines for required renderpacks.
         // this ensures that all packs are up to date and there will be no stutters when switching
-        noiseFreeRenderPack->preloadPipelines(recordParameters);
-        snapshotRenderPack->preloadPipelines(recordParameters);
+        noiseFreeParameters.commandBuffer = p.cb;
+        preloadPipelines(noiseFreeRenderPack, p.cb);
+        recordParameters.commandBuffer = p.cb;
+        preloadPipelines(snapshotRenderPack, p.cb);
 
         // This needs to happen after modelviewer's accumulation updates
         // TODO: clean this nasty code up
         if (_options.outputVideo == 1) {
             if (snapshotInProgress) {
                 snapshotMicroseconds += app().gameTime().sinceLastUpdate;
-                if (recordParameters.accum == RayTracingRenderPack::Accumulation::RETAIN) {
+                if (recordParameters.accum == PathTracingRenderPack::Accumulation::RETAIN) {
                     float snapshotSeconds = (float) snapshotMicroseconds.count() / 1000000.0f;
                     if (snapshotSeconds >= snapshotDelay - options.accum) {
                         pulseSnapshot();
                         snapshotInProgress = false;
                     }
-                } else if (recordParameters.accum == RayTracingRenderPack::Accumulation::OFF) {
+                } else if (recordParameters.accum == PathTracingRenderPack::Accumulation::OFF) {
                     float snapshotSeconds = (float) snapshotMicroseconds.count() / 1000000.0f;
                     if (snapshotSeconds >= snapshotDelay) // 1s delay before triggering snapshot
                     {
@@ -1488,15 +1494,13 @@ public:
         if (debugPt || (_options.outputVideo > 1) || (_options.skipCamAnim)) return; // don't flash while debugging path tracer or generating full-pt video
 
         // add flashing effect only when the path tracer is accumulating.
-        if (!(ph::rt::World::RayTracingRenderPackCreateParameters::isStochastic(options.rpmode)) ||
-            (recordParameters.accum == RayTracingRenderPack::Accumulation::RETAIN))
-            return;
+        if (!options.isPathTraced() || (recordParameters.accum == PathTracingRenderPack::Accumulation::RETAIN)) return;
 
         // Add flash effect
         auto       width    = sw().initParameters().width;
         auto       height   = sw().initParameters().height;
         VkViewport viewport = {0, 0, (float) width, (float) height, 0.0f, 1.0f};
-        auto       scissor  = ph::va::util::rect2d(width, height, 0, 0);
+        auto       scissor  = VkRect2D {{0, 0}, {width, height}};
         vkCmdSetViewport(p.cb, 0, 1, &viewport);
         vkCmdSetScissor(p.cb, 0, 1, &scissor);
         vkCmdBindPipeline(p.cb, VK_PIPELINE_BIND_POINT_GRAPHICS, _flashPipeline);
@@ -1511,7 +1515,7 @@ public:
         // Only allow camera movement/other functions in real-time mode
         if (debugPt) {
             ModelViewer::onKeyPress(key, down);
-        } else if (options.rpmode == ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE) {
+        } else if (options.rpmode == Options::RenderPackMode::NOISE_FREE) {
             auto & io = ImGui::GetIO();
             if (io.WantCaptureMouse) return;
 
@@ -1588,18 +1592,17 @@ public:
         }
         if (dynReflMap && dynDiffMap) {
             // Need to update environment map parameters too.
-            recordParameters.irradianceMap = dynDiffMap;
-            recordParameters.reflectionMap = dynReflMap;
-            recordParameters.ambientLight  = {0.f, 0.f, 0.f};
+            noiseFreeParameters.irradianceMap = recordParameters.irradianceMap = dynDiffMap;
+            noiseFreeParameters.reflectionMap = recordParameters.reflectionMap = dynReflMap;
+            noiseFreeParameters.ambientLight = recordParameters.ambientLight = {0.f, 0.f, 0.f};
+
         } else {
-            recordParameters.irradianceMap = {};
-            recordParameters.reflectionMap = {};
-            recordParameters.ambientLight  = {0.2f, 0.2f, 0.2f};
+            noiseFreeParameters.irradianceMap = recordParameters.irradianceMap = {};
+            noiseFreeParameters.reflectionMap = recordParameters.reflectionMap = {};
+            noiseFreeParameters.ambientLight = recordParameters.ambientLight = {0.2f, 0.2f, 0.2f};
         }
 
         Skybox::ConstructParameters cp = {loop(), *assetSys};
-        cp.width                       = sw().initParameters().width;
-        cp.height                      = sw().initParameters().height;
         cp.pass                        = mainColorPass();
         cp.skymap                      = recordParameters.reflectionMap;
         cp.skymapType                  = Skybox::SkyMapType::CUBE;
@@ -1688,15 +1691,14 @@ protected:
                 if (!debugPtRenderPack || !noiseFreeRenderPack) recreateRenderPacks();
                 if (debugPt) {
                     setAnimated(false);
-                    selectedCameraIndex      = 0; // first person camera
-                    pathRayTracingRenderPack = debugPtRenderPack;
-                    options.rpmode           = ptMode;
-                    _renderPackDirty         = true;
+                    selectedCameraIndex   = 0; // first person camera
+                    pathTracingRenderPack = debugPtRenderPack;
+                    options.rpmode        = ptMode;
+                    _renderPackDirty      = true;
                 } else {
                     setAnimated(true);
-                    pathRayTracingRenderPack = noiseFreeRenderPack;
-                    options.rpmode           = ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE;
-                    _renderPackDirty         = true;
+                    options.rpmode   = Options::RenderPackMode::NOISE_FREE;
+                    _renderPackDirty = true;
                 }
             }
 
@@ -1761,10 +1763,10 @@ protected:
                 Eigen::Vector3f center     = sceneCenter;
                 float           handedness = 1.0f;
                 for (size_t i = 0; i < lights.size(); ++i) {
-                    auto               light = lights[i];
+                    auto               node = lights[i];
                     Eigen::Vector3f    position;
                     Eigen::Quaternionf origRotation;
-                    ph::rt::NodeTransform(light->nodes()[0]->worldTransform()).decompose(&position, &origRotation, nullptr);
+                    sg::Transform(node->worldTransform()).decompose(&position, &origRotation, nullptr);
                     ImGui::Text("position: %f, %f, %f", position.x(), position.y(), position.z());
                     ImGui::Text("rotation: %f, %f, %f, %f", origRotation.x(), origRotation.y(), origRotation.z(), origRotation.w());
 
@@ -1797,10 +1799,10 @@ protected:
                     r *= *origLightRotation;
 
                     // Combine everything into view transform.
-                    ph::rt::NodeTransform tfm = ph::rt::NodeTransform::Identity();
+                    sg::Transform tfm = sg::Transform::Identity();
                     tfm.translate(newPos);
                     tfm.rotate(origRotation);
-                    light->nodes()[0]->setWorldTransform(tfm);
+                    node->setWorldTransform(tfm);
                 }
             }
 
@@ -1830,7 +1832,7 @@ protected:
                         if (ImGui::TreeNode(formatstr("Camera %zu", i))) {
                             Eigen::Vector3f    p;
                             Eigen::Quaternionf r;
-                            ph::rt::NodeTransform(c.node->worldTransform()).decompose(&p, &r, nullptr);
+                            sg::Transform(c.node->worldTransform()).decompose(&p, &r, nullptr);
                             ImGui::Text("position: %f, %f, %f", p.x(), p.y(), p.z());
                             ImGui::Text("rotation: %f, %f, %f, %f", r.x(), r.y(), r.z(), r.w());
                             ImGui::SliderFloat("znear", &c.zNear, 0.00001f, 0.1f);
@@ -1872,8 +1874,6 @@ protected:
 
     void recreateMainRenderPack() override {
         _renderPackDirty = false;
-        if (pathRayTracingRenderPack == snapshotRenderPack || pathRayTracingRenderPack == noiseFreeRenderPack)
-            pathRayTracingRenderPack = nullptr; // let ptdemo manage these two render packs
 
         // Check for resize
         // TODO: resizing code crashes. fix this after that's been fixed
@@ -1881,59 +1881,53 @@ protected:
         auto newH    = app().sw().initParameters().height;
         bool resized = (newW != _renderTargetSize.width || newH != _renderTargetSize.height);
 
-        if (resized || !snapshotRenderPack || !noiseFreeRenderPack || !debugPtRenderPack || _renderPackDirty) recreateRenderPacks();
+        if (resized || !snapshotRenderPack || !noiseFreeRenderPack || !debugPtRenderPack || !pathTracingRenderPack) recreateRenderPacks();
 
-        if (options.rpmode == ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE)
-            pathRayTracingRenderPack = noiseFreeRenderPack;
-        else if (options.rpmode == ptMode) {
-            if (debugPt)
-                pathRayTracingRenderPack = debugPtRenderPack;
-            else
-                pathRayTracingRenderPack = snapshotRenderPack;
-        } else {
-            pathRayTracingRenderPack = nullptr; // don't delete a render pack that we're using
-            ModelViewer::recreateMainRenderPack();
-        }
         setupLights();
     }
 
 private:
     void recreateRenderPacks() {
-        auto w  = sw().initParameters().width;
-        auto h  = sw().initParameters().height;
-        auto cp = World::RayTracingRenderPackCreateParameters {ptMode}
-                      .setTarget(sw().initParameters().colorFormat, w, h, VK_IMAGE_LAYOUT_UNDEFINED)
-                      .setViewport(0.f, 0.f, (float) w, (float) h)
-                      .setClear(true);
-        if (noiseFreeRenderPack || snapshotRenderPack) {
-            threadSafeDeviceWaitIdle(dev().vgi().device);
-            if (noiseFreeRenderPack) world->deleteRayTracingRenderPack(noiseFreeRenderPack);
-            if (snapshotRenderPack) world->deleteRayTracingRenderPack(snapshotRenderPack);
-            if (debugPtRenderPack) // todo: disable in release?
-                world->deleteRayTracingRenderPack(debugPtRenderPack);
+        threadSafeDeviceWaitIdle(dev().vgi().device);
+        pathTracingRenderPack = nullptr;
+        safeDelete(snapshotRenderPack);
+        safeDelete(noiseFreeRenderPack);
+        safeDelete(debugPtRenderPack);
+
+        auto w = sw().initParameters().width;
+        auto h = sw().initParameters().height;
+
+        {
+            auto cp = PathTracingRenderPack::CreateParameters {world}
+                          .setFast(ptMode == Options::RenderPackMode::FAST_PT)
+                          .setTarget(sw().initParameters().colorFormat, w, h, VK_IMAGE_LAYOUT_UNDEFINED)
+                          .setViewport(0.f, 0.f, (float) w, (float) h)
+                          .setClear(true);
+            cp.targetIsSRGB    = true;
+            snapshotRenderPack = PathTracingRenderPack::create(cp);
+            debugPtRenderPack  = PathTracingRenderPack::create(cp);
         }
-        PH_ASSERT(!noiseFreeRenderPack);
-        PH_ASSERT(!snapshotRenderPack);
 
-        cp.targetIsSRGB     = true;
-        snapshotRenderPack  = world->createRayTracingRenderPack(cp);
-        debugPtRenderPack   = world->createRayTracingRenderPack(cp);
-        cp.mode             = {ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE};
-        noiseFreeRenderPack = world->createRayTracingRenderPack(cp);
+        {
+            auto cp = NoiseFreeRenderPack::CreateParameters {world}
+                          .setTarget(sw().initParameters().colorFormat, w, h, VK_IMAGE_LAYOUT_UNDEFINED)
+                          .setViewport(0.f, 0.f, (float) w, (float) h)
+                          .setClear(true);
+            cp.targetIsSRGB     = true;
+            noiseFreeRenderPack = NoiseFreeRenderPack::create(cp);
+        }
 
-        options.rpmode           = (_options.outputVideo == 2) ? ptMode : ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE;
-        pathRayTracingRenderPack = (_options.outputVideo == 2) ? snapshotRenderPack : noiseFreeRenderPack;
+        options.rpmode        = (_options.outputVideo == 2) ? ptMode : Options::RenderPackMode::NOISE_FREE;
+        pathTracingRenderPack = snapshotRenderPack;
 
-        recordParameters.spp                = options.spp;
-        recordParameters.maxDiffuseBounces  = options.diffBounces;
-        recordParameters.maxSpecularBounces = options.specBounces;
-        recordParameters.spp                = options.spp;
+        recordParameters.spp                   = options.spp;
+        recordParameters.maxDiffuseBounces     = options.diffBounces;
+        noiseFreeParameters.maxSpecularBounces = recordParameters.maxSpecularBounces = options.specBounces;
         ptConfig.setupRp(recordParameters);
     }
 
-    ph::rt::RayTracingRenderPack * noiseFreeRenderPack = nullptr;
-    ph::rt::RayTracingRenderPack * snapshotRenderPack  = nullptr;
-    ph::rt::RayTracingRenderPack * debugPtRenderPack   = nullptr;
+    ph::rt::render::PathTracingRenderPack * snapshotRenderPack = nullptr;
+    ph::rt::render::PathTracingRenderPack * debugPtRenderPack  = nullptr;
 
     bool snapshot = false;
     bool debugPt  = false;

@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-mesh-builder.h"
 #include "mesh-utils.h"
@@ -238,7 +241,7 @@ void GLTFMeshBuilder::readWeights(int accessorId, std::vector<float> & weights) 
         // Tell user this gltf file is using an
         // unsupported number of weights per vertex.
         PH_LOGW("This GLTF file uses a non-standard number of weights per vertex, "
-                "%d. Current implementation only ever expects this value to be 4.",
+                "%zu. Current implementation only ever expects this value to be 4.",
                 weightsPerVertex);
 
         // End method without reading the weights since they are not supported.
@@ -480,9 +483,10 @@ void GLTFMeshBuilder::MeshData::append(GLTFMeshBuilder::MeshData & input) {
             PH_LOGW("Mesh includes primitives with mixed tangent strides: %d and %d", tangents.width, input.tangents.width);
             tangents.vec.reserve(tangents.vec.size() + tangents.width * input.tangents.count());
             auto width = std::min(tangents.width, input.tangents.width);
-            for (size_t i = 0; i < input.tangents.size(); i++) {
+            auto count = input.tangents.count();
+            for (size_t i = 0; i < count; i++) {
                 for (size_t j = 0; j < width; j++) { tangents.vec.push_back(input.tangents.vec[i * input.tangents.width + j]); }
-                for (size_t j = tangents.width; j < input.tangents.width; j++) { tangents.vec.push_back(0); }
+                for (size_t j = width; j < tangents.width; j++) { tangents.vec.push_back(0); }
             }
         }
         PH_ASSERT(input.tangents.count() == input.positions.count());

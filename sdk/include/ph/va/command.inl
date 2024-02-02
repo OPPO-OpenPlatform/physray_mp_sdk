@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 namespace ph {
@@ -19,7 +23,7 @@ struct VulkanSubmissionProxy {
         ConstRange<VkSemaphore>          signalSemaphores;
     };
 
-    virtual VkResult submit(const ConstRange<SubmitInfo> &, VkFence signalFence = VK_NULL_HANDLE) = 0;
+    virtual VkResult submit(const ConstRange<SubmitInfo> &, VkFence signalFence = VK_NULL_HANDLE, const char * errorMessagePromptForDeviceLost = nullptr) = 0;
 
     VkResult submit(const SubmitInfo & si, VkFence signalFence = VK_NULL_HANDLE) { return submit({&si, 1}, signalFence); }
 
@@ -32,7 +36,7 @@ struct VulkanSubmissionProxy {
     virtual VkResult present(const PresentInfo &) = 0;
 
     // wait for the queue to be completely idle (including both CPU and GPU)
-    virtual VkResult waitIdle() = 0;
+    virtual VkResult waitIdle(const char * deviceLostErrorPrompt = nullptr) = 0;
 
 protected:
     VulkanSubmissionProxy(const VulkanGlobalInfo & vgi_, uint32_t queueFamilyIndex): _vgi(vgi_), _queueFamilyIndex(queueFamilyIndex) {}
@@ -120,11 +124,11 @@ public:
         return r;
     }
 
-    /// finish and reset all previously created commandd buffers.
-    void finish() {
+    /// finish and reset all previously created command buffers.
+    void finish(const char * deviceLostErrorPrompt = nullptr) {
         if (_pending) {
             // TODO: wait for fence
-            _vsp.waitIdle();
+            _vsp.waitIdle(deviceLostErrorPrompt);
             _pending = {};
         }
         if (!_buffers.empty()) {
@@ -135,9 +139,9 @@ public:
     }
 
     /// Submit a command buffer, wait for it, and everything submitted before it, to finish.
-    void finish(CommandBuffer & cb) {
+    void finish(CommandBuffer & cb, const char * deviceLostErrorPrompt = nullptr) {
         submit(cb);
-        finish();
+        finish(deviceLostErrorPrompt);
     }
 
     /// Asynchronously running GPU work. No waiting for it to finish.
@@ -150,7 +154,7 @@ public:
 
     /// Synchronously running GPU work. Wait for the GPU work to finish before returning.
     template<typename FUNC>
-    void syncexec(FUNC f) {
+    void syncExec(FUNC f) {
         exec(f);
         finish();
     }

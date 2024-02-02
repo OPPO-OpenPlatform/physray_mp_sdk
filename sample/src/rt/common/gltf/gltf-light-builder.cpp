@@ -1,27 +1,30 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-light-builder.h"
 
 namespace gltf {
 
-ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::Node * node) {
+ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, sg::Node * node) {
     // Fetch the scene of the node we are adding a component to
     // so that we can create that component.
-    ph::rt::Scene & phScene = node->scene();
+    auto & world = node->world();
 
     // Reference to the created light.
     ph::rt::Light * phLight;
 
     // Get the light's emissive color.
-    ph::rt::Float3 emission = getEmissive(light);
+    Eigen::Vector3f emission = getEmissive(light);
 
     // If light is a directional light.
     if (light.type == "directional") {
         // Create the light.
-        phLight   = phScene.createLight({});
+        phLight   = world.createLight({});
         auto desc = ph::rt::Light::Desc().setType(ph::rt::Light::Type::DIRECTIONAL).setEmission(emission);
         desc.directional.setDir(0.0f, 0.0f, -1.0f);
         phLight->reset(desc);
@@ -44,7 +47,7 @@ ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::N
         // Choosing a cutoff of attenuation = .001,
         // rangeDistance = sqrt(intensity / .001).
         float range = ((light.range <= 0) ? std::sqrt(float(light.intensity) / 0.001f) : float(light.range));
-        phLight     = phScene.createLight({});
+        phLight     = world.createLight({});
         phLight->reset(ph::rt::Light::Desc().setEmission(emission).setRange(range));
         node->attachComponent(phLight);
 
@@ -68,9 +71,9 @@ ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::N
         float range = ((light.range <= 0) ? std::sqrt(float(light.intensity) / 0.001f) : float(light.range));
 
         // Create the light.
-        phLight = phScene.createLight({});
+        phLight = world.createLight({});
         phLight->reset(ph::rt::Light::Desc().setEmission(emission).setRange(range).setSpot(
-            ph::rt::Light::Spot().setDir(ph::rt::Float3::make(0, 0, 1)).setFalloff((float) spot.innerConeAngle, (float) spot.outerConeAngle)));
+            ph::rt::Light::Spot().setDir({0, 0, 1}).setFalloff((float) spot.innerConeAngle, (float) spot.outerConeAngle)));
         node->attachComponent(phLight);
 
         // Give light a suitable shadow map.
@@ -83,7 +86,7 @@ ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::N
         PH_LOGW("Light type '%s' not supported. Defaulting to point light.", light.type.c_str());
 
         // Default to a point light.
-        phLight = phScene.createLight({});
+        phLight = world.createLight({});
         phLight->reset(ph::rt::Light::Desc().setPoint(ph::rt::Light::Point()).setDimension(0.f, 0.f).setEmission(emission[0], emission[1], emission[2]));
         node->attachComponent(phLight);
 
@@ -95,8 +98,8 @@ ph::rt::Light * GLTFLightBuilder::build(const tinygltf::Light & light, ph::rt::N
     return phLight;
 }
 
-ph::rt::Float3 GLTFLightBuilder::getEmissive(const tinygltf::Light & light) {
-    ph::rt::Float3 emissive;
+Eigen::Vector3f GLTFLightBuilder::getEmissive(const tinygltf::Light & light) {
+    Eigen::Vector3f emissive;
 
     // Fill in the selected colors.
     for (std::size_t index = 0; index < light.color.size(); ++index) { emissive[index] = (float) light.color[index]; }

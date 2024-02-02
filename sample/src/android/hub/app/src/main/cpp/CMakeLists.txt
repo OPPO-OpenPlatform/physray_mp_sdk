@@ -1,5 +1,5 @@
 #############################################################################
-# Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+# Copyright (C) 2020 - 2024 OPPO. All rights reserved.
 ###############################################################################
 
 cmake_minimum_required(VERSION 3.16.3) # 3.16.3 is the latest cmake version coming with Ubuntu 20.04
@@ -20,7 +20,6 @@ add_library(${PROJECT_NAME} SHARED
         native-lib.cpp
         drag-motion-controller.cpp
         main.cpp
-        $<TARGET_OBJECTS:physray-rt-internal> # this is for the ph::rt::unitTest() function
 )
 target_compile_definitions(${PROJECT_NAME} PRIVATE  SAMPLE_FOLDER="${root-dir}/sample")
 target_include_directories(${PROJECT_NAME} PRIVATE ${root-dir}/sample)

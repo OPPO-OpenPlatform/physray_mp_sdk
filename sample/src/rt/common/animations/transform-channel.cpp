@@ -1,15 +1,18 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "transform-channel.h"
 
 namespace animations {
 
-TransformChannel::TransformChannel(ph::rt::Node * target): _target(target) {
+TransformChannel::TransformChannel(sg::Node * target): _target(target) {
     // Retrieve the transform of the given node.
-    const ph::rt::NodeTransform & transform = target->transform();
+    const sg::Transform & transform = target->transform();
 
     // Decompose the transform's current values so we can initialize
     // this transform channel's properties to them.
@@ -24,8 +27,7 @@ TransformChannel::TransformChannel(ph::rt::Node * target): _target(target) {
     _scale    = Eigen::Vector3f {scaling(0, 0), scaling(1, 1), scaling(2, 2)};
 }
 
-TransformChannel::TransformChannel(ph::rt::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation,
-                                   const Eigen::Vector3f & scale)
+TransformChannel::TransformChannel(sg::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation, const Eigen::Vector3f & scale)
     : _target(target), _translation(translation), _rotation(rotation), _scale(scale) {
     //
 }
@@ -33,7 +35,7 @@ TransformChannel::TransformChannel(ph::rt::Node * target, const Eigen::Vector3f 
 void TransformChannel::setTime(std::chrono::duration<uint64_t, std::nano>) {
     // Calculate the node transform from the separated transforms.
     // Make sure the transform is initialized to identity.
-    ph::rt::NodeTransform nodeTransform = ph::rt::NodeTransform::Identity();
+    sg::Transform nodeTransform = sg::Transform::Identity();
 
     // Combine everything into the transform by order of translate, rotate, scale.
     nodeTransform.translate(_translation);

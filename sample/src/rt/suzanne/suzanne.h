@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -18,7 +18,7 @@ struct SuzanneScene : ModelViewer {
         float       skyboxLodBias = 0.0f; ///< set to negative value to disable skybox.
         Options() {
             // Enable noise free mode by default.
-            rpmode = ph::rt::World::RayTracingRenderPackCreateParameters::Mode::NOISE_FREE;
+            rpmode = RenderPackMode::NOISE_FREE;
         }
     };
 
@@ -28,7 +28,7 @@ struct SuzanneScene : ModelViewer {
         auto       model    = std::filesystem::path(o.model);
         if (model.empty()) {
             model     = "model/suzanne/15K.obj";
-            material  = scene->createMaterial();
+            material  = world->createMaterial();
             auto desc = Material::Desc {};
             desc.setAlbedoMap(textureCache->loadFromAsset("model/suzanne/albedo-mipmapped-astc.ktx2"));
             desc.setNormalMap(textureCache->loadFromAsset("model/suzanne/normal-astc.ktx2"));

@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-timeline-builder.h"
 #include "gltf-transform-channel-builder.h"
@@ -138,7 +141,7 @@ std::shared_ptr<::animations::Channel> GLTFTimelineBuilder::buildWeightChannel(t
 
 ::animations::TransformChannel * GLTFTimelineBuilder::getNodeTransformChannel(int targetNode) {
     // Fetch the node being manipulated by this animation channel.
-    ph::rt::Node * phNode = _sceneAsset->getNodes()[targetNode];
+    sg::Node * phNode = _sceneAsset->getNodes()[targetNode];
 
     // Find the channel in question.
     auto iterator = _nodeToTransformChannel.find(phNode);
@@ -165,7 +168,7 @@ std::shared_ptr<::animations::Channel> GLTFTimelineBuilder::buildWeightChannel(t
 
 ::animations::WeightChannel * GLTFTimelineBuilder::getNodeWeightChannel(int targetNode) {
     // Fetch the node being manipulated by this animation channel.
-    ph::rt::Node * phNode = _sceneAsset->getNodes()[targetNode];
+    sg::Node * phNode = _sceneAsset->getNodes()[targetNode];
 
     // Find the channel in question.
     auto iterator = _nodeToWeightChannel.find(phNode);

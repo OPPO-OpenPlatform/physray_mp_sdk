@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -36,14 +39,16 @@ public:
     Eigen::AlignedBox<float, 3> & getBounds() { return _bounds; }
 
     /**
-     * The scene everything has been added to.
+     * The scene graph everything has been added to.
      */
-    ph::rt::Scene * getMainScene() const { return _mainScene; }
+    sg::Graph & getMainGraph() const { return *_mainGraph; }
+
+    void setMainGraph(sg::Graph * mainGraph) { _mainGraph = mainGraph; }
 
     /**
-     * @param mainScene The main scene everything is added to.
+     * The scene everything has been added to.
      */
-    void setMainScene(ph::rt::Scene * mainScene) { _mainScene = mainScene; }
+    ph::rt::Scene & getMainScene() const { return _mainGraph->scene(); }
 
     /**
      * @return Set of all cameras in the scene.
@@ -58,24 +63,12 @@ public:
     /**
      * @return Set of all lights in the scene.
      */
-    const std::vector<ph::rt::Light *> & getLights() const { return _lights; }
+    const std::vector<sg::Node *> & getLights() const { return _lights; }
 
     /**
      * @return Set of all lights in the scene.
      */
-    std::vector<ph::rt::Light *> & getLights() { return _lights; }
-
-    /**
-     * @return Maps names to a set of lights with that name.
-     * Lights without a name are mapped to "".
-     */
-    const std::unordered_map<std::string, std::unordered_set<ph::rt::Light *>> & getNameToLights() const { return _nameToLights; }
-
-    /**
-     * @return Maps names to a set of lights with that name.
-     * Lights without a name are mapped to "".
-     */
-    std::unordered_map<std::string, std::unordered_set<ph::rt::Light *>> & getNameToLights() { return _nameToLights; }
+    std::vector<sg::Node *> & getLights() { return _lights; }
 
     /**
      * @return List of all materials, mapped to their id.
@@ -102,12 +95,12 @@ public:
     /**
      * @return List of all nodes, mapped to their id.
      */
-    const std::vector<ph::rt::Node *> & getNodes() const { return _nodes; }
+    const std::vector<sg::Node *> & getNodes() const { return _nodes; }
 
     /**
      * @return List of all nodes, mapped to their id.
      */
-    std::vector<ph::rt::Node *> & getNodes() { return _nodes; }
+    std::vector<sg::Node *> & getNodes() { return _nodes; }
 
     /**
      * @return List of all animations, mapped to their id.
@@ -143,9 +136,9 @@ protected:
     Eigen::AlignedBox<float, 3> _bounds;
 
     /**
-     * Main scene everything is added to.
+     * Main scene graph everything is added to.
      */
-    ph::rt::Scene * _mainScene = nullptr;
+    sg::Graph * _mainGraph = nullptr;
 
     /**
      * List of all cameras.
@@ -155,12 +148,7 @@ protected:
     /**
      * List of all lights.
      */
-    std::vector<ph::rt::Light *> _lights;
-
-    /**
-     * Maps names to a set of lights with that name.
-     */
-    std::unordered_map<std::string, std::unordered_set<ph::rt::Light *>> _nameToLights;
+    std::vector<sg::Node *> _lights;
 
     /**
      * List of all materials, mapped to their id.
@@ -175,12 +163,12 @@ protected:
     /**
      * List of all nodes, mapped to their id.
      */
-    std::vector<ph::rt::Node *> _nodes;
+    std::vector<sg::Node *> _nodes;
 
     /**
      * Maps names to a set of nodes with that name.
      */
-    std::unordered_map<std::string, std::unordered_set<ph::rt::Node *>> _nameToNodes;
+    std::unordered_map<std::string, std::unordered_set<sg::Node *>> _nameToNodes;
 
     /**
      * List of all animations, mapped to their id.

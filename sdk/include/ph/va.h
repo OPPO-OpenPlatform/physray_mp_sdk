@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 // This is the main public interface of physray-va module
@@ -275,6 +275,12 @@ struct SimpleBarriers {
         return *this;
     }
 
+    SimpleBarriers & addImage(VkImage image, VkAccessFlags srcAccess, VkAccessFlags dstAccess, VkImageLayout oldLayout, VkImageLayout newLayout,
+                              VkImageAspectFlags aspect) {
+        VkImageSubresourceRange range = {aspect, 0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS};
+        return addImage(image, srcAccess, dstAccess, oldLayout, newLayout, range);
+    }
+
     SimpleBarriers & setStages(VkPipelineStageFlags src, VkPipelineStageFlags dst) {
         srcStage = src;
         dstStage = dst;
@@ -283,7 +289,8 @@ struct SimpleBarriers {
 
     void write(VkCommandBuffer cb) const {
         if (memory.empty() && buffers.empty() && images.empty()) return;
-        vkCmdPipelineBarrier(cb, srcStage, dstStage, {}, (uint32_t) memory.size(), memory.data(), (uint32_t) buffers.size(), buffers.data(), 0, nullptr);
+        vkCmdPipelineBarrier(cb, srcStage, dstStage, {}, (uint32_t) memory.size(), memory.data(), (uint32_t) buffers.size(), buffers.data(),
+                             (uint32_t) images.size(), images.data());
     }
 };
 

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -49,8 +49,8 @@ struct WarScene : ModelViewer {
         scene->name = modelPath.string();
         _bbox       = addModelToScene({modelPath.string()});
 
-        Blob<ph::rt::Material *> materialList  = scene->materials();
-        size_t                   materialCount = materialList.size();
+        std::vector<ph::rt::Material *> materialList  = world->materials();
+        size_t                          materialCount = materialList.size();
 
         for (size_t i = 0; i < materialCount; i++) {
             Material *     material = materialList[i];
@@ -68,10 +68,10 @@ struct WarScene : ModelViewer {
 
         // Setup light bounding box (The directional light shadow map rendering code needs it to calculate light projection matrix)
         if (lights.size() > 0) {
-            auto & l = lights[0];
-            auto   d = l->desc();
+            auto l = lights[0]->light();
+            auto d = l->desc();
             if (d.type == Light::DIRECTIONAL) {
-                d.directional.setBBox(fromEigen(_bbox.min()), fromEigen(_bbox.max()));
+                d.directional.setBBox(_bbox.min(), _bbox.max());
                 l->reset(d);
             }
             l->shadowMapBias      = 0.004f;
@@ -94,7 +94,6 @@ struct WarScene : ModelViewer {
         recordParameters.skyboxLighting                                      = 0;
         recordParameters.maxSpecularBounces                                  = 1;
         recordParameters.skyboxRotation = 2.105f; // this is to align the sun direction in skybox texture to the directional light.
-        recordParameters.sRGB           = true;
         setupShadowRenderPack();
     }
 
@@ -102,7 +101,7 @@ struct WarScene : ModelViewer {
         ModelViewer::update();
         if (_cullingManager.activeAlgorithm() != 0) {
             _cullingManager.setCamera(&cameras[selectedCameraIndex], ((float) sw().initParameters().width), ((float) sw().initParameters().height));
-            _cullingManager.setScene(scene);
+            _cullingManager.setGraph(graph);
             _cullingManager.update();
         }
     }
@@ -127,7 +126,7 @@ struct WarScene : ModelViewer {
             }
             ImGui::SliderFloat("Distance Cutoff", &_cullingManager.cullingDistance(), 0.1f, 4.0f);
             ImGui::SliderFloat("camera Zfar", &cameras[0].zFar, 0.1f, 4.0f);
-            if (ImGui::BeginTable("", (int) ph::rt::RayTracingRenderPack::ShadowMode::NUM_SHADOW_MODES)) {
+            if (ImGui::BeginTable("", (int) ph::rt::render::NoiseFreeRenderPack::ShadowMode::NUM_SHADOW_MODES)) {
                 ImGui::TableNextColumn();
                 if (ImGui::Button("POI #0")) teleportToPOI(0);
                 ImGui::TableNextColumn();

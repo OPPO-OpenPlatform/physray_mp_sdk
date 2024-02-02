@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -255,23 +255,10 @@ Skybox::~Skybox() {
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-void Skybox::resize(uint32_t w, uint32_t h) {
-    _cp.width  = w;
-    _cp.height = h;
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-//
 void Skybox::draw(VkCommandBuffer cmdBuffer, const Eigen::Matrix4f & proj, const Eigen::Matrix3f & camera, float saturation, float gamma, bool outputSRGB,
                   float skyboxRotation, float lodBias, const Eigen::Vector3f & ambient) {
     RenderLoopCommandRecorder rec(_cp.loop);
     rec.setCommands(cmdBuffer);
-
-    // setup viewport and scissor
-    VkViewport viewport = {0, 0, (float) _cp.width, (float) _cp.height, 0.0f, 1.0f};
-    auto       scissor  = ph::va::util::rect2d(_cp.width, _cp.height, 0, 0);
-    vkCmdSetViewport(cmdBuffer, 0, 1, &viewport);
-    vkCmdSetScissor(cmdBuffer, 0, 1, &scissor);
 
     auto dp = GraphicsProgram::DrawParameters {};
     auto vb = rps::Buffer::View {_vb};

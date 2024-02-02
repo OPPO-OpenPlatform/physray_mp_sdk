@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -7,22 +7,16 @@
 
 namespace animations {
 
-WeightChannel::WeightChannel(ph::rt::Node * target, MorphTargetManager * morphTargetManager): _target(target), _morphTargetManager(morphTargetManager) {
-    const auto components = _target->components();
-    for (const auto & component : components) {
-        if (component->type() == ph::rt::NodeComponent::MODEL) {
-            _mesh = &((ph::rt::Model *) component)->mesh();
-            break;
-        }
-    }
+WeightChannel::WeightChannel(sg::Node * target, MorphTargetManager * morphTargetManager): _target(target), _morphTargetManager(morphTargetManager) {
+    _target->forEachModel([this](auto model, auto) { _mesh = &model->mesh(); });
     if (_mesh == nullptr)
-        PH_LOGI("Node targeted by weight animation channel has no meshview!");
+        PH_LOGI("Node targeted by weight animation channel has no model attached to it!");
     else {
         _weights = _morphTargetManager->getWeights(_mesh);
     }
 }
 
-WeightChannel::WeightChannel(ph::rt::Node * target, MorphTargetManager * morphTargetManager, const std::vector<float> weights)
+WeightChannel::WeightChannel(sg::Node * target, MorphTargetManager * morphTargetManager, const std::vector<float> weights)
     : _target(target), _morphTargetManager(morphTargetManager), _weights(weights) {
     //
 }

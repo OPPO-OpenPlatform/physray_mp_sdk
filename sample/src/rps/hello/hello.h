@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -52,7 +52,7 @@ public:
 
         // Run an empty render pass. This will effectively clear the back buffer to the specified color.
         auto rt0 = rps::Pass::RenderTarget {bb}.setClearColorF(.25f, .5f, .75f, 1.f);
-        if (_mainPass->cmdBegin(_recorder, {{rt0}})) {
+        if (_mainPass->cmdBegin(_recorder, {{&rt0, 1}})) {
             // empty pass.
             _mainPass->cmdEnd(_recorder);
         }

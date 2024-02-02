@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "app.h"
@@ -91,7 +91,6 @@ extern "C" JNIEXPORT void JNICALL Java_com_innopeak_ph_sdk_sample_hub_Native_tou
 
 // ---------------------------------------------------------------------------------------------------------------------
 //
-namespace ph::rt {
-void unitTest();
+extern "C" JNIEXPORT void JNICALL Java_com_innopeak_ph_sdk_sample_hub_Native_unitTest(JNIEnv *, jclass clazz) {
+    // TODO: do not native unit test here.
 }
-extern "C" JNIEXPORT void JNICALL Java_com_innopeak_ph_sdk_sample_hub_Native_unitTest(JNIEnv *, jclass clazz) { ph::rt::unitTest(); }

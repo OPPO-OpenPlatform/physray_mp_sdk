@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -43,7 +43,7 @@ void GLTFWeightChannelBuilder::buildVectorKeyValues(
         buildKeyValues<std::vector<float>>(timeToKeyValue, keyValueBuilder, stride);
     } else {
         // Warn user that interpolation type is not supported.
-        PH_LOGW("Interpolation type '%s' is not supported for morph target weights.");
+        PH_LOGW("Interpolation type '%s' is not supported for morph target weights.", _animationSampler->interpolation.c_str());
     }
 }
 

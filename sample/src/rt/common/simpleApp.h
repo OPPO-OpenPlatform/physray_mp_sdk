@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -28,7 +28,7 @@ struct SimpleGameTime {
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
-//
+// TODO: move this out of rt folder, since it is also used by RPS samples.
 struct SimpleScene {
 
     PH_NO_COPY(SimpleScene);

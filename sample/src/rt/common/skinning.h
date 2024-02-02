@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -16,9 +16,9 @@ namespace skinning {
 
 struct SkinningData {
     // Indexed by joint id
-    std::vector<ph::rt::Node *>        jointMatrices;
-    std::vector<ph::rt::NodeTransform> prevJointMatrices;
-    std::vector<Eigen::Matrix4f>       inverseBindMatrices;
+    std::vector<sg::Node *>      jointMatrices;
+    std::vector<sg::Transform>   prevJointMatrices;
+    std::vector<Eigen::Matrix4f> inverseBindMatrices;
 
     // Per-vertex data
     std::vector<uint32_t> joints;

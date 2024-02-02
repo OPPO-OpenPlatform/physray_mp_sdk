@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -29,26 +29,26 @@ struct CornellBoxScene : ModelViewer {
         auto baseDesc = []() { return rt::Material::Desc {}; };
         // auto red      = world->create("red",      baseDesc().setAlbedo(1.f, 0.f, 0.f));
         // auto green    = world->create("green",    baseDesc().setAlbedo(0.f, 1.f, 0.f));
-        auto yellow = scene->create("yellow", baseDesc().setAlbedo(1.f, 1.f, 0.f));
+        auto yellow = world->create("yellow", baseDesc().setAlbedo(1.f, 1.f, 0.f));
         // auto magenta  = world->create("magenta",  baseDesc().setAlbedo(1.f, 0.f, 1.f));
-        auto mirror = scene->create("mirror", baseDesc().setAlbedo(0.f, 1.0f, 1.f).setMetalness(1.f).setRoughness(0.f));
-        auto glass  = scene->create("glass", baseDesc().setMetalness(0.f).setRoughness(0.f).setOpaqueness(0.f).setAlbedo(1.0f, .3f, 1.f));
+        auto mirror = world->create("mirror", baseDesc().setAlbedo(0.f, 1.0f, 1.f).setMetalness(1.f).setRoughness(0.f));
+        auto glass  = world->create("glass", baseDesc().setMetalness(0.f).setRoughness(0.f).setOpaqueness(0.f).setAlbedo(1.0f, .3f, 1.f));
 
         const float scaling  = o.scaling; // scaling factor for X and Y
         const float handness = o.leftHanded ? -1.0f : 1.0f;
 
         _meshNode1 = addBox("box1", 0.5f * scaling, 0.5f * scaling, 0.5f * scaling, glass, nullptr,
-                            NodeTransform::make({-0.5f * scaling, 0.f * scaling, 0.5f * scaling * handness}, // position
+                            sg::Transform::make({-0.5f * scaling, 0.f * scaling, 0.5f * scaling * handness}, // position
                                                 Eigen::Quaternionf::Identity()                               // rotation
                                                 ));
 
         _meshNode2 = addIcosahedron("sphere0", .4f * scaling, 2, mirror, nullptr,
-                                    NodeTransform::make({0.6f * scaling, 0.1f * scaling, -0.3f * scaling * handness}, // position
+                                    sg::Transform::make({0.6f * scaling, 0.1f * scaling, -0.3f * scaling * handness}, // position
                                                         Eigen::Quaternionf::Identity()                                // rotation
                                                         ));
 
         _meshNode3 = addIcosahedron("sphere1", 1.f * scaling, 0, yellow, nullptr,
-                                    NodeTransform::make({-0.4f * scaling, -0.4f * scaling, -0.4f * scaling * handness}, // position
+                                    sg::Transform::make({-0.4f * scaling, -0.4f * scaling, -0.4f * scaling * handness}, // position
                                                         Eigen::Quaternionf::Identity(),                                 // rotation
                                                         {.6f * scaling, .6f * scaling, .6f * scaling}                   // scaling
                                                         ));
@@ -62,7 +62,7 @@ struct CornellBoxScene : ModelViewer {
         setupDefaultCamera(bbox);
         setupShadowRenderPack();
 
-        addCeilingLight(bbox, 10.0f, 0.3f * scaling, o.rpmode == ph::rt::World::RayTracingRenderPackCreateParameters::Mode::PATH_TRACING);
+        addCeilingLight(bbox, 10.0f, 0.3f * scaling, o.isPathTraced());
     }
 
     void update() override {
@@ -80,9 +80,9 @@ struct CornellBoxScene : ModelViewer {
             auto lightX = std::sin(angle) * radius;
             auto lightZ = std::cos(angle) * radius;
 
-            ph::rt::Node &        lightNode = *(lights.back()->nodes()[0]);
-            ph::rt::NodeTransform transform = lightNode.worldTransform();
-            transform.translation()         = Eigen::Vector3f(lightX, transform.translation().y(), lightZ);
+            sg::Node &    lightNode = *lights.back();
+            sg::Transform transform = lightNode.worldTransform();
+            transform.translation() = Eigen::Vector3f(lightX, transform.translation().y(), lightZ);
             lightNode.setWorldTransform(transform);
         }
 
@@ -90,8 +90,8 @@ struct CornellBoxScene : ModelViewer {
         if (animated() && _meshNode1) {
             constexpr auto         cycle           = std::chrono::duration_cast<std::chrono::microseconds>(5s).count();
             auto                   angle           = PI * -2.0f * (float) (totalMicroseconds.count() % cycle) / (float) cycle;
-            static Eigen::Vector3f baseTranslation = toEigen(_meshNode1->transform().translation());
-            ph::rt::NodeTransform  tr              = _meshNode1->transform();
+            static Eigen::Vector3f baseTranslation = _meshNode1->transform().translation();
+            sg::Transform          tr              = _meshNode1->transform();
 
             // Do _NOT_ use auto to declare "t" for the reason described here:
             // http://eigen.tuxfamily.org/dox-devel/TopicPitfalls.html#title3
@@ -112,8 +112,8 @@ struct CornellBoxScene : ModelViewer {
             auto           angle   = PI * -2.0f * (float) (totalMicroseconds.count() % cycle) / (float) cycle;
             float          scaling = std::sin(angle) * 0.25f + 0.75f; // scaling in range [0.5, 1.0];
 
-            static ph::rt::NodeTransform baseTransform = _meshNode3->transform();
-            auto                         newTransform  = baseTransform;
+            static sg::Transform baseTransform = _meshNode3->transform();
+            auto                 newTransform  = baseTransform;
             newTransform.scale(Eigen::Vector3f(1.0f, scaling, 1.f)); // do non-uniform scaling.
             _meshNode3->setTransform(newTransform);
         }
@@ -136,7 +136,7 @@ struct CornellBoxScene : ModelViewer {
 private:
     const Options _options;
 
-    rt::Node *_meshNode1 = nullptr, *_meshNode2 = nullptr, *_meshNode3 = nullptr;
+    sg::Node *_meshNode1 = nullptr, *_meshNode2 = nullptr, *_meshNode3 = nullptr;
 
     rt::Mesh *                   _mesh4 = nullptr;
     std::vector<Eigen::Vector3f> _mesh4Positions;
@@ -150,14 +150,14 @@ private:
     //     blue->name           = "blue";
     //     blue->setDesc(rt::Material::Desc {}.setAlbedo(0.f, 0.f, 1.f));
     //     _meshNode4 = addBox("box3", 1.f * scaling, .2f * scaling, .2f * scaling, blue, nullptr,
-    //                         NodeTransform::make({0.5f * scaling, -.8f * scaling, .3f * scaling * handness}, // position
+    //                         sg::Transform::make({0.5f * scaling, -.8f * scaling, .3f * scaling * handness}, // position
     //                                             Eigen::Quaternionf::Identity()                              // rotation
     //                                             ));
     //     for (auto c : _meshNode4->components()) {
     //         if (c->type() == NodeComponent::MODEL) {
     //             _mesh4 = &((ph::rt::Model *) c)->mesh();
     //             _mesh4Positions.clear();
-    //             for (const auto & pos : _mesh4->positions()) { _mesh4Positions.push_back(ph::rt::toEigen(pos)); }
+    //             for (const auto & pos : _mesh4->positions()) { _mesh4Positions.push_back(ph::rt::pos); }
     //             break;
     //         }
     //     }

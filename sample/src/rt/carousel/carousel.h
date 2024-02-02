@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -28,7 +28,7 @@ struct CarouselScene : ModelViewer {
             rpmode = RenderPackMode::FAST_PT;
             accum  = 128;
 #else
-            rpmode = RenderPackMode::PATH_TRACING;
+            rpmode = RenderPackMode::PT;
             accum  = 256;
 #endif
         }
@@ -82,7 +82,8 @@ struct CarouselScene : ModelViewer {
         std::string         scenePath = useLowPoly ? "model/carousel/mobile/carousel.gltf" : "model/carousel/desktop/carousel.gltf";
         Eigen::AlignedBox3f bbox      = addModelToScene({scenePath, "*", nullptr, nullptr, !useLowPoly});
         if (useLowPoly) {
-            for (auto & l : lights) {
+            for (auto & n : lights) {
+                auto l = n->light();
                 if (l) {
                     auto ld         = l->desc();
                     ld.dimension[0] = ld.dimension[1] = 0.025f;
@@ -94,7 +95,7 @@ struct CarouselScene : ModelViewer {
                     ld.range                                         = bbox.diagonal().norm();
                     ld.allowShadow                                   = true;
                     l->reset(ld);
-                    if (debugManager) debugManager->updateDebugLight(l);
+                    if (debugManager) debugManager->updateDebugLight(n);
                 }
             }
         }

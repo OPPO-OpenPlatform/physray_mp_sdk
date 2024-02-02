@@ -1,11 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
 
-#include <ph/rt-utils.h>
-
+#include "../common/scene-graph.h"
 #include <queue>
 
 struct CullingAlgorithm {
@@ -21,11 +20,11 @@ struct CullingAlgorithm {
     virtual ~CullingAlgorithm() = default;
 
     // culling implementation
-    virtual void culling(Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) = 0;
+    virtual void culling(sg::Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) = 0;
 
     // calculate BBox transfer from local to world space
     // same function as the calculateWorldSpaceBoundingBox in gltf-scene-asset-builder
-    static Eigen::AlignedBox3f calculateWorldSpaceBoundingBox(const ph::rt::NodeTransform & transform, const Eigen::AlignedBox3f & bbox) {
+    static Eigen::AlignedBox3f calculateWorldSpaceBoundingBox(const sg::Transform & transform, const Eigen::AlignedBox3f & bbox) {
         // Total number of corners in a box.
         constexpr size_t cornerCount = 8;
 
@@ -166,14 +165,10 @@ struct EmptyCullingAlgorithm : CullingAlgorithm {
 
     EmptyCullingAlgorithm() { name = "Culling Disabled"; }
 
-    void culling(Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) override {
+    void culling(sg::Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) override {
         (void) camPos;
         (void) mvp;
-        int index = 0;
-        for (auto c : node->components()) {
-            if (c->type() == NodeComponent::MODEL) { node->setComponentVisible(index, true); }
-            index++;
-        }
+        node->forEachLight([&](auto, auto entity) { node->graph().scene().setVisible(entity, true); });
     }
 };
 
@@ -182,35 +177,25 @@ struct DistanceCullingAlgorithm : CullingAlgorithm {
 
     DistanceCullingAlgorithm() { name = "Distance Culling"; }
 
-    void culling(Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) override {
+    void culling(sg::Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) override {
         (void) mvp;
         if (!node) { return; }
-        int index = 0;
-        for (auto c : node->components()) {
-            if (c->type() == NodeComponent::MODEL) {
+        node->forEachModel([&](auto c, auto entity) {
+            // return if model do not contain any bbox data
+            if (c->userData(guidBBOX).size() == 0) { return; }
 
-                // return if model do not contain any bbox data
-                if (((Model *) c)->userData(guidBBOX).size() == 0) { return; }
+            Eigen::AlignedBox3f modelBBox    = *(Eigen::AlignedBox3f *) c->userData(guidBBOX).data();
+            Eigen::AlignedBox3f instanceBBox = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
 
-                Eigen::AlignedBox3f modelBBox    = *(Eigen::AlignedBox3f *) (((Model *) c)->userData(guidBBOX).data());
-                Eigen::AlignedBox3f instanceBBox = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
+            Eigen::Vector3f instanceCenter    = instanceBBox.center();
+            Eigen::Vector3f radiusVector      = (instanceBBox.max() - instanceBBox.min()) / 2.0;
+            Eigen::Vector3f camInstanceVector = instanceCenter - *camPos;
 
-                Eigen::Vector3f instanceCenter    = instanceBBox.center();
-                Eigen::Vector3f radiusVector      = (instanceBBox.max() - instanceBBox.min()) / 2.0;
-                Eigen::Vector3f camInstanceVector = instanceCenter - *camPos;
-
-                // TODO: this method calculate square root, could remove this and compare square
-                float radius          = radiusVector.norm();
-                float camInstanceDiff = camInstanceVector.norm();
-
-                if (camInstanceDiff < radius + distanceCullingSize) {
-                    node->setComponentVisible(index, true);
-                } else {
-                    node->setComponentVisible(index, false);
-                }
-            }
-            index++;
-        }
+            // TODO: this method calculate square root, could remove this and compare square
+            float radius          = radiusVector.norm();
+            float camInstanceDiff = camInstanceVector.norm();
+            node->graph().scene().setVisible(entity, camInstanceDiff < radius + distanceCullingSize);
+        });
     }
 };
 
@@ -219,27 +204,22 @@ struct FrustumCullingAlgorithm1 : CullingAlgorithm {
 
     FrustumCullingAlgorithm1() { name = "Frustum Culling"; }
 
-    void culling(Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) {
+    void culling(sg::Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) {
         (void) camPos;
         if (!node) { return; }
-        int index = 0;
-        for (auto c : node->components()) {
-            if (c->type() == NodeComponent::MODEL) {
+        node->forEachModel([&](auto c, auto entity) {
+            // return if model do not contain any bbox data
+            if (c->userData(guidBBOX).size() == 0) { return; }
 
-                // return if model do not contain any bbox data
-                if (((Model *) c)->userData(guidBBOX).size() == 0) { return; }
+            Eigen::AlignedBox3f modelBBox    = *(Eigen::AlignedBox3f *) c->userData(guidBBOX).data();
+            Eigen::AlignedBox3f instanceBBox = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
 
-                Eigen::AlignedBox3f modelBBox    = *(Eigen::AlignedBox3f *) (((Model *) c)->userData(guidBBOX).data());
-                Eigen::AlignedBox3f instanceBBox = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
+            // check instance center only
+            Eigen::Vector3f instanceCenter = instanceBBox.center();
+            Eigen::Vector3f instanceExtent = (instanceBBox.max() - instanceBBox.min()) / 2.0f;
 
-                // check instance center only
-                Eigen::Vector3f instanceCenter = instanceBBox.center();
-                Eigen::Vector3f instanceExtent = (instanceBBox.max() - instanceBBox.min()) / 2.0f;
-
-                node->setComponentVisible(index, boundingBoxIntersectOrInsideFrustum(mvp, instanceCenter, instanceExtent));
-            }
-            index++;
-        }
+            node->graph().scene().setVisible(entity, boundingBoxIntersectOrInsideFrustum(mvp, instanceCenter, instanceExtent));
+        });
     }
 };
 
@@ -248,63 +228,54 @@ struct WarZoneCullingAlgorithm2 : CullingAlgorithm {
 
     WarZoneCullingAlgorithm2() { name = "WarZone Culling V2"; }
 
-    void culling(Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) {
+    void culling(sg::Node * node, const Eigen::Vector3f * camPos, const Eigen::Matrix4f & mvp) {
         if (!node) { return; }
-        int index = 0;
-        for (auto c : node->components()) {
-            if (c->type() == NodeComponent::MODEL) {
+        node->forEachModel([&](auto c, auto entity) {
+            // return direct if model do not contain any bbox data
+            if (c->userData(guidHasSkin).size() == 0) { return; }
 
-                // return direct if model do not contain any bbox data
-                if (((Model *) c)->userData(guidHasSkin).size() == 0) { return; }
+            bool hasSkin = *(bool *) c->userData(guidHasSkin).data();
 
-                bool hasSkin = *(bool *) (((Model *) c)->userData(guidHasSkin).data());
+            Eigen::AlignedBox3f modelBBox      = *(Eigen::AlignedBox3f *) c->userData(guidBBOX).data();
+            Eigen::AlignedBox3f instanceBBox   = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
+            Eigen::Vector3f     instanceCenter = instanceBBox.center();
+            Eigen::Vector3f     radiusVector   = (instanceBBox.max() - instanceBBox.min()) / 2.0;
+            float               radius         = radiusVector.norm();
 
-                Eigen::AlignedBox3f modelBBox      = *(Eigen::AlignedBox3f *) (((Model *) c)->userData(guidBBOX).data());
-                Eigen::AlignedBox3f instanceBBox   = calculateWorldSpaceBoundingBox(node->worldTransform(), modelBBox);
-                Eigen::Vector3f     instanceCenter = instanceBBox.center();
-                Eigen::Vector3f     radiusVector   = (instanceBBox.max() - instanceBBox.min()) / 2.0;
-                float               radius         = radiusVector.norm();
+            bool instanceVisible = false;
 
-                bool instanceVisible = false;
+            // Visible test1: distance culling
+            {
+                Eigen::Vector3f camInstanceVector = instanceCenter - *camPos;
+                float           camInstanceDiff   = camInstanceVector.norm();
 
-                // Visible test1: distance culling
-                {
-                    Eigen::Vector3f camInstanceVector = instanceCenter - *camPos;
-                    float           camInstanceDiff   = camInstanceVector.norm();
+                if (camInstanceDiff < radius + distanceCullingSize) { instanceVisible = true; }
+            }
+            if (instanceVisible) {
+                node->graph().scene().setVisible(entity, true);
+                return;
+            }
 
-                    if (camInstanceDiff < radius + distanceCullingSize) { instanceVisible = true; }
-                }
-                if (instanceVisible) {
-                    node->setComponentVisible(index, true);
-                    continue;
-                }
-
-                // Visible test2: frustum culling for all corners
-                {
-                    if (hasSkin) {
-                        // check bounding sphere for dynmaic instance
-                        instanceVisible = boundingSphereIntersectOrInsideFrustum(mvp, instanceCenter, radius);
-                    } else {
-                        // check bounding box for static instance
-                        instanceVisible = boundingBoxIntersectOrInsideFrustum(mvp, instanceCenter, radiusVector);
-                    }
-                }
-                if (instanceVisible) {
-                    node->setComponentVisible(index, true);
+            // Visible test2: frustum culling for all corners
+            {
+                if (hasSkin) {
+                    // check bounding sphere for dynamic instance
+                    instanceVisible = boundingSphereIntersectOrInsideFrustum(mvp, instanceCenter, radius);
                 } else {
-                    node->setComponentVisible(index, false);
+                    // check bounding box for static instance
+                    instanceVisible = boundingBoxIntersectOrInsideFrustum(mvp, instanceCenter, radiusVector);
                 }
             }
-            index++;
-        }
+            node->graph().scene().setVisible(entity, instanceVisible);
+        });
     }
 };
 
 class CullingManager {
     std::vector<std::unique_ptr<CullingAlgorithm>> _algorithms;
     size_t                                         _activeAlgorithm = 0;
-    ph::rt::Scene *                                _scene;
-    Eigen::Vector3f                                _cameraPosition = Eigen::Vector3f(0.f, 0.f, 0.f);
+    sg::Graph *                                    _graph           = nullptr;
+    Eigen::Vector3f                                _cameraPosition  = Eigen::Vector3f(0.f, 0.f, 0.f);
     Eigen::Matrix4f                                _projView;
 
 public:
@@ -324,7 +295,7 @@ public:
         _projView                  = proj * viewMatrix;
     }
 
-    void setScene(Scene * scene) { _scene = scene; }
+    void setGraph(sg::Graph * graph) { _graph = graph; }
 
     size_t numAlgorithms() const { return _algorithms.size(); }
 
@@ -337,15 +308,15 @@ public:
     float & cullingDistance() const { return _algorithms[_activeAlgorithm]->distanceCullingSize; }
 
     void update() {
-        ph::rt::Node & rootNode = _scene->rootNode();
-        auto           c        = _algorithms[_activeAlgorithm].get();
-        bfsTraverseNodeGraph(&rootNode, [&](Node * n) { c->culling(n, &_cameraPosition, _projView); });
+        sg::Node & rootNode = _graph->root();
+        auto       c        = _algorithms[_activeAlgorithm].get();
+        bfsTraverseNodeGraph(&rootNode, [&](sg::Node * n) { c->culling(n, &_cameraPosition, _projView); });
     }
 
 private:
     template<typename PROC>
-    void bfsTraverseNodeGraph(Node * root, PROC p) {
-        std::queue<Node *> pending;
+    void bfsTraverseNodeGraph(sg::Node * root, PROC p) {
+        std::queue<sg::Node *> pending;
         pending.push(root);
         while (!pending.empty()) {
             // update the queue

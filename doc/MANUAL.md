@@ -47,9 +47,13 @@ top of https://www.khronos.org/blog/ray-tracing-in-vulkan#:~:text=A%20ray%20trac
 - Has a real time ray tracer with limited but noise free effects
 - Has a path tracer for offline rendering with advanced global illumination effects.
 
-# RT.H
+# Headers
 
-The public interface of the RT module is [rt.h](rt/public/inc/ph/rt.h). Everything you need to utilize the RT module is defined in this header.
+The public interface of the RT module is divided between three files:
+- [rt-scene.h](../sdk/rt/scene/public/inc/ph/rt-scene.h)
+- [rt-scene.glsl](../sdk/rt/scene/public/inc/ph/rt-scene.glsl)
+- [rtrender.h](../sdk/rt/render/public/inc/ph/rt-render.h)
+Everything you need to utilize the RT module is defined in these headers.
 
 Here's the top level design of the module:
 
@@ -78,7 +82,7 @@ Here's an example code of creating a World class:
     // Initialize VK device with hardware ray query capabilities.
     ph::va::SimpleVulkanDevice::ConstructParameters dcp;
     dcp.instance = &inst;
-    ph::rt::setupDeviceConstructionForRayQuery(dcp, true);
+    ph::rt::dcp.setupForRayQuery(true);
     ph::va::SimpleVulkanDevice dev(dcp);
 
     // Setup world creation parameters
@@ -196,7 +200,19 @@ render mode. The render mode enumeration defines what kind of ray tracing effect
   This mode is the most complete and most time consuming mode that implemented a full path tracer. It is capable of rendering full range of GI effects as well
   as supporting arbitrary shape of light.
 
-<TODO: sample code of rendering>
+```c++
+    struct Options : ModelViewer::Options {
+        std::string model;
+        Options() {
+            // Set Render Pack Mode to be Noise Free
+            rpmode           = RenderPackMode::NOISE_FREE;
+            shadowMode       = ShadowMode::REFINED;
+            animated         = true;
+            flythroughCamera = true;
+            showFrameTimes   = true;
+        }
+    };
+```
 
 # Shader Pipeline
 

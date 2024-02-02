@@ -14,7 +14,7 @@ Please follow this document for detailed build instructions: [BUILD.md](doc/BUIL
 A: No. This SDK is based on Vulkan 1.1+ API.
 
 ## Q: Does the SDK support ray tracing effect on mobile platform?
-A: Yes. The new SDK will support both Qualcomm Snapdragon 8Gen2 and MTK D9200 platform. 
+A: Yes. The new SDK will support Qualcomm Snapdragon 8Gen2, 8Gen3, and MTK D9200, DX-2, DX-3 platform. 
 
 ## Q: Is the ray tracing effect accelerated by hardware? What about on mobile platform?
 A: The rendering is fully hardware accelerated on ray tracing capable hardware, such as NVIDIA GeForce 20XX graphics card. On mobile platform though, the
@@ -47,6 +47,7 @@ PhysRay SDK references the following 3rd party libraries:
 | [Backward-cpp](https://github.com/bombela/backward-cpp) | MIT |
 
 PhysRay SDK has the following third-party assets in the sample/dev assets directory:
+
 | Name | License |
 | ---- | ------- |
 | [Dead Leaf](https://www.cgtrader.com/free-3d-models/plant/leaf/dead-leaf) | Royalty Free License |

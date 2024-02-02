@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -23,8 +23,6 @@ public:
     struct ConstructParameters {
         ph::va::SimpleRenderLoop &      loop;
         ph::AssetSystem &               assetSys;
-        uint32_t                        width {};
-        uint32_t                        height {};
         VkRenderPass                    pass {};
         ph::rt::Material::TextureHandle skymap {};
         SkyMapType                      skymapType = SkyMapType::CUBE;
@@ -33,8 +31,6 @@ public:
     Skybox(const ConstructParameters &);
 
     ~Skybox();
-
-    void resize(uint32_t w, uint32_t h);
 
     void draw(VkCommandBuffer cmdBuffer, const Eigen::Matrix4f & proj, const Eigen::Matrix3f & camera, float saturation, float gamma, bool outputSRGB,
               float skyboxRotation, float lodBias = 0.0f, const Eigen::Vector3f & ambientColor = {0.f, 0.f, 0.f});
@@ -65,7 +61,6 @@ private:
 
     void createPipelines();
     void createBoxGeometry(float width, float height, float depth);
-    void constructRenderpass();
     void setupImageAndSampler();
     void createDummySkyboxTexture();
 

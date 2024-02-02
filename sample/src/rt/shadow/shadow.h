@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../common/modelviewer.h"
@@ -7,14 +7,15 @@
 using namespace ph;
 using namespace ph::va;
 using namespace ph::rt;
+using namespace ph::rt::render;
 
 struct ShadowScene : ModelViewer {
 
     struct Options : ModelViewer::Options {
         bool directional = false; // set to true to use directional light
         Options() {
-            rpmode     = World::RayTracingRenderPackCreateParameters::SHADOW_TRACING;
-            shadowMode = RayTracingRenderPack::ShadowMode::REFINED;
+            rpmode     = RenderPackMode::SHADOW;
+            shadowMode = NoiseFreeRenderPack::ShadowMode::REFINED;
         }
     };
 
@@ -77,7 +78,7 @@ struct ShadowScene : ModelViewer {
 
             if (_pointLight) {
                 // update light position
-                ph::rt::NodeTransform lightTransform = ph::rt::NodeTransform::Identity();
+                sg::Transform lightTransform = sg::Transform::Identity();
                 lightTransform.translate(_lightPosition);
                 _lightNode->setTransform(lightTransform);
             } else {
@@ -85,7 +86,7 @@ struct ShadowScene : ModelViewer {
                 auto            desc      = _light->desc();
                 Eigen::Vector3f direction = _floorCenter - _lightPosition;
                 direction.y() /= 4.0f;
-                desc.directional.direction = ph::rt::fromEigen(direction.normalized());
+                desc.directional.direction = direction.normalized();
                 _light->reset(desc);
             }
         }
@@ -101,7 +102,7 @@ private:
     Eigen::AlignedBox3f _sceneSize;
 
     /// Node containing the light of the scene.
-    ph::rt::Node * _lightNode;
+    sg::Node * _lightNode;
 
     /// The light component.
     ph::rt::Light * _light;
@@ -128,7 +129,7 @@ private:
         _pointLight = false;
         auto desc   = _light->desc();
         desc.type   = ph::rt::Light::Type::DIRECTIONAL;
-        desc.directional.setBBox(fromEigen(_sceneSize.min()), fromEigen(_sceneSize.max()));
+        desc.directional.setBBox(_sceneSize.min(), _sceneSize.max());
         desc.dimension[0] = 0.f;
         desc.dimension[1] = 0.f;
         desc.setEmission(10.f, 10.f, 10.f);
@@ -139,7 +140,7 @@ private:
     // /// Creates default light.
     // void setupPointLight() {
     //     //Create the light's transform.
-    //     ph::rt::NodeTransform lightTransform = ph::rt::NodeTransform::Identity();
+    //     sg::Transform lightTransform = sg::Transform::Identity();
     //     lightTransform.translate(_lightPosition);
 
     //     //Create the node that will contain the light.
@@ -171,18 +172,18 @@ private:
 
     void initialLight() {
         // Create the light's transform.
-        ph::rt::NodeTransform lightTransform = ph::rt::NodeTransform::Identity();
-        _lightPosition.x()                   = _floorCenter.x();
-        _lightPosition.y()                   = 120.f;
-        _lightPosition.z()                   = -50.0f;
+        sg::Transform lightTransform = sg::Transform::Identity();
+        _lightPosition.x()           = _floorCenter.x();
+        _lightPosition.y()           = 120.f;
+        _lightPosition.z()           = -50.0f;
         lightTransform.translate(_lightPosition);
 
         // Create the node that will contain the light.
-        _lightNode = this->scene->createNode({});
+        _lightNode = this->graph->createNode({});
         _lightNode->setTransform(lightTransform);
 
         // Create a light.
-        _light = this->scene->createLight({});
+        _light = this->world->createLight({});
         _lightNode->attachComponent(_light);
 
         // Create shadow map
@@ -190,6 +191,6 @@ private:
         _shadowMap2D   = textureCache->createShadowMap2D("directional");
 
         // Give light to model viewer.
-        lights.push_back(_light);
+        lights.push_back(_lightNode);
     }
 };

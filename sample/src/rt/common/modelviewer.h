@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -34,14 +34,23 @@ struct ModelViewer : SimpleScene {
         bool     refractionAndRoughReflection   = true;  ///< handle refractive and rough reflective materials
         bool     clearColorOnMainPass           = false;
         bool     clearDepthOnMainPass           = false;
+        bool     renderToSRGB                   = true; ///< set to false to render in linear color space.
 
         // Set to true to create a set of debug geometries.
         bool enableDebugGeometry = false;
 
-        using RenderPackMode      = ph::rt::World::RayTracingRenderPackCreateParameters::Mode;
-        using ShadowMode          = ph::rt::RayTracingRenderPack::ShadowMode;
-        RenderPackMode rpmode     = RenderPackMode::PATH_TRACING;
-        ShadowMode     shadowMode = ShadowMode::RAY_TRACED;
+        enum class RenderPackMode {
+            RAST,       // rasterizer
+            PT,         // path tracer
+            NOISE_FREE, // noise free tracing
+            SHADOW,     // ray traced shadow
+            FAST_PT,    // fast path tracing
+        };
+
+        RenderPackMode rpmode = RenderPackMode::PT;
+
+        using ShadowMode      = ph::rt::render::NoiseFreeRenderPack::ShadowMode;
+        ShadowMode shadowMode = ShadowMode::RAY_TRACED;
 
         // Assets
         std::vector<std::string> additionalAssetFolders;
@@ -53,20 +62,28 @@ struct ModelViewer : SimpleScene {
 
         /// Set to true to use flythrough camera. Orbital camera is used by default.
         bool flythroughCamera = false;
+
+        bool isPathTraced() const { return RenderPackMode::PT == rpmode || RenderPackMode::FAST_PT == rpmode; }
     };
 
     ModelViewer(SimpleApp & app, const Options & o);
 
-    ~ModelViewer() { ph::safeDelete(world); }
+    ~ModelViewer() {
+        ph::safeDelete(graph);
+        ph::safeDelete(pathTracingRenderPack);
+        ph::safeDelete(noiseFreeRenderPack);
+        ph::safeDelete(shadowRenderPack);
+        ph::safeDelete(world);
+    }
 
     Options                       options;
     skinning::SkinnedMeshManager  skinningManager;
     PathTracerConfig              ptConfig;
     MorphTargetManager            morphTargetManager;
     ph::AssetSystem *             assetSys   = nullptr;
-    ph::rt::CommandQueueProxy *   cmdProxy   = nullptr;
     ph::rt::World *               world      = nullptr;
     ph::rt::Scene *               scene      = nullptr;
+    sg::Graph *                   graph      = nullptr;
     ph::rt::Material *            lambertian = nullptr;
     ph::rt::Material *            glossy     = nullptr;
     ph::rt::Mesh *                sphereMesh = nullptr;
@@ -89,15 +106,19 @@ struct ModelViewer : SimpleScene {
 
     /// List of all lights we have added to the scene.
     /// Used to render shadow maps for lights.
-    std::vector<ph::rt::Light *> lights;
+    std::vector<sg::Node *> lights;
 
     // Used to update the scene.
-    ph::rt::RayTracingRenderPack *                 pathRayTracingRenderPack = nullptr;
-    ph::rt::RayTracingRenderPack::RecordParameters recordParameters         = {};
+    ph::rt::render::PathTracingRenderPack *                 pathTracingRenderPack = nullptr;
+    ph::rt::render::PathTracingRenderPack::RecordParameters recordParameters      = {};
+
+    // Noise free render pack
+    ph::rt::render::NoiseFreeRenderPack *                 noiseFreeRenderPack = nullptr;
+    ph::rt::render::NoiseFreeRenderPack::RecordParameters noiseFreeParameters = {};
 
     // shadow map data members
-    ph::rt::ShadowMapRenderPack *                 shadowRenderPack = nullptr;
-    ph::rt::ShadowMapRenderPack::RecordParameters shadowParameters = {};
+    ph::rt::render::ShadowMapRenderPack *                 shadowRenderPack = nullptr;
+    ph::rt::render::ShadowMapRenderPack::RecordParameters shadowParameters = {};
     // TODO: use nearest sampler to sample 32 bit float
     const VkFormat shadowMapFormat = VK_FORMAT_R16_SFLOAT;
     const uint32_t shadowMapSize   = 512;
@@ -129,14 +150,17 @@ struct ModelViewer : SimpleScene {
     /// to do customized rendering to offscreen framebuffers.
     /// TODO: this is obsolete concept, should be merged into recordMainColorPass()
     virtual void recordOffscreenPass(const PassParameters &);
+    virtual void recordShadowMap(const PassParameters &);
+    virtual void recordPathTracer(const PassParameters &);
+    virtual void recordNoiseFree(const PassParameters &);
 
     /// Main color pass. Render to default frame buffer.
     virtual void recordMainColorPass(const PassParameters &);
 
     void toggleShadowMode() {
-        constexpr int count         = (int) ph::rt::RayTracingRenderPack::ShadowMode::NUM_SHADOW_MODES;
-        int           newMode       = ((int) recordParameters.shadowMode + 1) % count;
-        recordParameters.shadowMode = (ph::rt::RayTracingRenderPack::ShadowMode) (newMode);
+        constexpr int count            = (int) ph::rt::render::NoiseFreeRenderPack::ShadowMode::NUM_SHADOW_MODES;
+        int           newMode          = ((int) noiseFreeParameters.shadowMode + 1) % count;
+        noiseFreeParameters.shadowMode = (ph::rt::render::NoiseFreeRenderPack::ShadowMode) (newMode);
     }
 
     /// Increments selectedCameraIndex to the next camera
@@ -185,7 +209,7 @@ protected:
         /// The default material to use with model w/o materials.
         ph::rt::Material * defaultMaterial = nullptr;
 
-        ph::rt::Node * parent = nullptr;
+        sg::Node * parent = nullptr;
 
         // If true, a geometry light is automatically created for
         // meshes using materials with nonzero emission.
@@ -194,25 +218,25 @@ protected:
         bool createGeomLights = false;
     };
 
-    ph::rt::Light * addPointLight(const Eigen::Vector3f & position, float range, const Eigen::Vector3f & emission, float radius = 0.0f,
-                                  bool enableDebugMesh = false);
+    sg::Node * addPointLight(const Eigen::Vector3f & position, float range, const Eigen::Vector3f & emission, float radius = 0.0f,
+                             bool enableDebugMesh = false);
 
-    ph::rt::Light * addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float brightness = 2.0f,
-                                        const Eigen::Vector2f * dimensions = nullptr, bool enableDebugMesh = false);
+    sg::Node * addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float brightness = 2.0f,
+                                   const Eigen::Vector2f * dimensions = nullptr, bool enableDebugMesh = false);
 
-    ph::rt::Light * addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, const Eigen::Vector3f & emission,
-                                        const Eigen::Vector2f * dimensions = nullptr, bool enableDebugMesh = false);
+    sg::Node * addDirectionalLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, const Eigen::Vector3f & emission,
+                                   const Eigen::Vector2f * dimensions = nullptr, bool enableDebugMesh = false);
 
     void addCeilingLight(const Eigen::AlignedBox3f & bbox, float brightness = 2.0f, float radius = 0.0f, bool enableDebugMesh = false);
 
-    ph::rt::Light * addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, float brightness, Eigen::Vector2f cones,
-                                 Eigen::Vector2f dimensions, bool enableDebugMesh = false);
+    sg::Node * addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, float brightness, Eigen::Vector2f cones,
+                            Eigen::Vector2f dimensions, bool enableDebugMesh = false);
 
-    ph::rt::Light * addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, const Eigen::Vector3f & emission,
-                                 Eigen::Vector2f cones, Eigen::Vector2f dimensions, bool enableDebugMesh = false);
+    sg::Node * addSpotLight(const Eigen::Vector3f & position, const Eigen::Vector3f & direction, float range, const Eigen::Vector3f & emission,
+                            Eigen::Vector2f cones, Eigen::Vector2f dimensions, bool enableDebugMesh = false);
 
     Eigen::AlignedBox3f addModelToScene(const LoadOptions &);
-    ph::rt::Node *      addModelNodeToScene(const LoadOptions &, Eigen::AlignedBox3f & bbox);
+    sg::Node *          addModelNodeToScene(const LoadOptions &, Eigen::AlignedBox3f & bbox);
 
     void addCornellBoxToScene(const Eigen::AlignedBox3f & bbox);
 
@@ -221,20 +245,20 @@ protected:
     /// Returns bounding box of the floor.
     Eigen::AlignedBox3f addFloorPlaneToScene(const Eigen::Vector3f & center, float dimension);
 
-    ph::rt::Node * addQuad(const char * name, float w, float h, ph::rt::Material * material, ph::rt::Node * parent = nullptr,
-                           const ph::rt::NodeTransform & transform = ph::rt::NodeTransform::Identity());
+    sg::Node * addQuad(const char * name, float w, float h, ph::rt::Material * material, sg::Node * parent = nullptr,
+                       const sg::Transform & transform = sg::Transform::Identity());
 
-    ph::rt::Node * addCircle(const char * name, float w, float h, ph::rt::Material * material, ph::rt::Node * parent = nullptr,
-                             const ph::rt::NodeTransform & transform = ph::rt::NodeTransform::Identity());
+    sg::Node * addCircle(const char * name, float w, float h, ph::rt::Material * material, sg::Node * parent = nullptr,
+                         const sg::Transform & transform = sg::Transform::Identity());
 
-    ph::rt::Node * addBox(const char * name, float w, float h, float d, ph::rt::Material * material, ph::rt::Node * parent = nullptr,
-                          const ph::rt::NodeTransform & transform = ph::rt::NodeTransform::Identity());
+    sg::Node * addBox(const char * name, float w, float h, float d, ph::rt::Material * material, sg::Node * parent = nullptr,
+                      const sg::Transform & transform = sg::Transform::Identity());
 
-    ph::rt::Node * addIcosahedron(const char * name, float radius, uint32_t subdivide, ph::rt::Material * material, ph::rt::Node * parent = nullptr,
-                                  const ph::rt::NodeTransform & transform = ph::rt::NodeTransform::Identity());
+    sg::Node * addIcosahedron(const char * name, float radius, uint32_t subdivide, ph::rt::Material * material, sg::Node * parent = nullptr,
+                              const sg::Transform & transform = sg::Transform::Identity());
 
     // Creates a simple mesh node.
-    ph::rt::Node * addMeshNode(ph::rt::Node * parent, const ph::rt::NodeTransform & transform, ph::rt::Mesh * mesh, ph::rt::Material * material);
+    sg::Node * addMeshNode(sg::Node * parent, const sg::Transform & transform, ph::rt::Mesh * mesh, ph::rt::Material * material);
 
     // Add the skybox, which will be rendered in a separate pass, without using physray-sdk
     virtual void addSkybox(float lodBias = 0.0f);
@@ -263,7 +287,7 @@ public:
 
 protected:
     bool                _accumDirty = false;
-    Eigen::AlignedBox3f transformBbox(Eigen::AlignedBox3f bbox, ph::rt::NodeTransform t);
+    Eigen::AlignedBox3f transformBbox(Eigen::AlignedBox3f bbox, sg::Transform t);
 
     /// @brief Loads the contents of the scene asset into the model viewer.
     /// @param o Model loading options.
@@ -311,7 +335,7 @@ private:
         // ph::va::AutoHandle<VkRenderPass>  colorDepthStencilPass;
     };
 
-    ph::rt::Node *                   _firstPersonNode = nullptr; /// Node that will hold the headlight and the default camera.
+    sg::Node *                       _firstPersonNode = nullptr; /// Node that will hold the headlight and the default camera.
     Eigen::AlignedBox3f              _bounds;                    /// store the scene AABB bounds
     ph::va::AutoHandle<VkRenderPass> _colorPass;                 // render pass with only color buffer only.
     VkFormat                         _colorTargetFormat = VK_FORMAT_UNDEFINED;
@@ -320,7 +344,7 @@ private:
 
     void recreateColorRenderPass();
 
-    ph::rt::Node * loadObj(const LoadOptions & o, Eigen::AlignedBox3f & bbox);
+    sg::Node * loadObj(const LoadOptions & o, Eigen::AlignedBox3f & bbox);
 
     ph::rt::Mesh * createCircle(float w, float h);
     ph::rt::Mesh * createQuad(float w, float h);

@@ -1,3 +1,7 @@
+/*****************************************************************************
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
+ *******************************************************************************/
+
 // This file is part of <ph/va.h>. Do NOT include it directly from your source code. Include <ph/va.h> instead.
 
 #include <set>
@@ -101,12 +105,22 @@ public:
         /// Extensible VK device feature list defined Vulkan 1.1
         std::vector<StructureChain> features2;
 
+        // External feature list provided by custom engine
+        void * features3 = nullptr;
+
         /// Add new feature to the feature2 list.
         template<typename T>
         T & addFeature(const T & feature) {
             features2.emplace_back(feature);
             return *(T *) features2.back().buffer.data();
         }
+
+        /// A utility function to setup SimpleVulkanDevice::ConstructParameters to for ray tracing
+        /// \param hw Whether to use hardware VK_KHR_ray_query extension. If set to false, then setup the construct
+        ///           parameter for in-house compute shader based pipeline. In this case, return value is always false.
+        /// \return   If the construction parameter is properly set for hardware ray query. If false is returned,
+        ///           then construction parameter structure is set to do in-house shader based pipeline.
+        bool setupForRayQuery(bool hw);
     };
 
     SimpleVulkanDevice(ConstructParameters);

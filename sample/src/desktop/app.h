@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "../rt/common/simpleApp.h"
@@ -85,8 +85,12 @@ public:
     }
 
     void run() {
-
         if (_options.offscreen) {
+            if (_options.recordPath.empty()) {
+                // offscreen rendering w/o recording to file is very unusual.
+                PH_LOGW("Offscreen rendering w/o specifying recording path is very unusual. If this is not what you want, "
+                        "please specify a recording path using --record-path parameter");
+            }
             resize(nullptr, _options.width, _options.height);
             bool running = true;
             while (running) {
@@ -218,33 +222,33 @@ inline void run(const DesktopApp::Options & dao, ARGS... args) {
 /// Setup common command line options for desktop app
 ///
 /// Note: this is a long list of options. When adding new options, please keep the list sorted alphabetically.
-#define SETUP_DESKTOP_APP_OPTIONS(app, dao)                                                                                                          \
-    std::string resolution__ = "1280x720";                                                                                                           \
-    app.set_help_all_flag("--help-all", "Expand all help");                                                                                          \
-    app.add_option("--async-loading", dao.asyncLoading, "Loading scene asynchronously. Default is on");                                              \
-    app.add_flag("--break-on-vk-error", dao.breakOnVkError, "Break into debugger on VK error. Default is off.");                                     \
-    app.add_flag("-o,--offscreen", dao.offscreen, ph::formatstr("Enable offscreen mode when specified."));                                           \
-    app.add_flag("-q", dao.rayQuery, ph::formatstr("Enable HW ray query extension if supported. Default is %s.", dao.rayQuery ? "on" : "off"));      \
-    app.add_flag(                                                                                                                                    \
-        "-Q", [&](int64_t) { dao.rayQuery = false; }, ph::formatstr("Disable HW ray query extension. Default is %s.", dao.rayQuery ? "on" : "off")); \
-    app.add_option("--record-path", dao.recordPath,                                                                                                  \
-                   "File path you want to record application output to. Must be printf formatted string\n"                                           \
-                   "accepting frame number, like %%d.jpg.");                                                                                         \
-    app.add_option("--record-start-frame", dao.recordStartFrame, "Index of the first frame to start recording. Default is 0.");                      \
-    app.add_option("--record-frame-count", dao.recordFrameCount,                                                                                     \
-                   "Exit the app after recording certain number of frames. Default is 1.\n"                                                          \
-                   "Set to 0 to record indefinitely, letting other parameters (like -a) to determine when to stop.");                                \
-    app.add_option("--resolution", resolution__, "Specify resolution in form of \"wxh\". Default is 1280x720");                                      \
-    app.add_option("-v,--vsync", dao.vsync, "Specify vsync state. Default is off.");                                                                 \
-    app.add_option("--use-vma-allocator", dao.useVmaAllocator, ph::formatstr("Enable VMA for device memory allocations. Default is on."));           \
-    app.add_option("--min-frame-rate", dao.minFrameRate, ph::formatstr("Minimum number of frames per second. Defaults to %f.", dao.minFrameRate));   \
-    app.add_option("--max-frame-rate", dao.maxFrameRate, "Maximum number of frames per second. Defaults to infinity.");                              \
-    app.add_option_function<float>(                                                                                                                  \
-        "--fixed-frame-rate",                                                                                                                        \
-        [&](const float & fixedFrameRate) {                                                                                                          \
-            dao.minFrameRate = fixedFrameRate;                                                                                                       \
-            dao.maxFrameRate = fixedFrameRate;                                                                                                       \
-        },                                                                                                                                           \
+#define SETUP_DESKTOP_APP_OPTIONS(app, dao)                                                                                                           \
+    std::string resolution__ = "1280x720";                                                                                                            \
+    app.set_help_all_flag("--help-all", "Expand all help");                                                                                           \
+    app.add_option("--async-loading", dao.asyncLoading, "Loading scene asynchronously. Default is on");                                               \
+    app.add_flag("--break-on-vk-error", dao.breakOnVkError, "Break into debugger on VK error. Default is off.");                                      \
+    app.add_flag("-o,--offscreen", dao.offscreen, ph::formatstr("Enable offscreen mode when specified."));                                            \
+    app.add_flag("-q", dao.rayQuery, ph::formatstr("Enable HW ray query extension if supported. Default is %s.", dao.rayQuery ? "on" : "off"));       \
+    app.add_flag(                                                                                                                                     \
+        "-Q", [&](int64_t) { dao.rayQuery = false; }, ph::formatstr("Disable HW ray query extension. Default is %s.", !dao.rayQuery ? "on" : "off")); \
+    app.add_option("--record-path", dao.recordPath,                                                                                                   \
+                   "File path you want to record application output to. Must be printf formatted string\n"                                            \
+                   "accepting frame number, like %%d.jpg.");                                                                                          \
+    app.add_option("--record-start-frame", dao.recordStartFrame, "Index of the first frame to start recording. Default is 0.");                       \
+    app.add_option("--record-frame-count", dao.recordFrameCount,                                                                                      \
+                   "Exit the app after recording certain number of frames. Default is 1.\n"                                                           \
+                   "Set to 0 to record indefinitely, letting other parameters (like -a) to determine when to stop.");                                 \
+    app.add_option("--resolution", resolution__, "Specify resolution in form of \"wxh\". Default is 1280x720");                                       \
+    app.add_option("-v,--vsync", dao.vsync, "Specify vsync state. Default is off.");                                                                  \
+    app.add_option("--use-vma-allocator", dao.useVmaAllocator, ph::formatstr("Enable VMA for device memory allocations. Default is on."));            \
+    app.add_option("--min-frame-rate", dao.minFrameRate, ph::formatstr("Minimum number of frames per second. Defaults to %f.", dao.minFrameRate));    \
+    app.add_option("--max-frame-rate", dao.maxFrameRate, "Maximum number of frames per second. Defaults to infinity.");                               \
+    app.add_option_function<float>(                                                                                                                   \
+        "--fixed-frame-rate",                                                                                                                         \
+        [&](const float & fixedFrameRate) {                                                                                                           \
+            dao.minFrameRate = fixedFrameRate;                                                                                                        \
+            dao.maxFrameRate = fixedFrameRate;                                                                                                        \
+        },                                                                                                                                            \
         "Sets min and max framerate to argument.");
 
 // ---------------------------------------------------------------------------------------------------------------------

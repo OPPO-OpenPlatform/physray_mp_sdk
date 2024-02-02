@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -22,9 +25,6 @@ public:
     /**
      * This constructor will load all of the images inside
      * the model file.
-     * @param textureCache The object used to load and cache textures.
-     * @param scene Used to create new objects.
-     * @param model The tinygltf model who's items are being instantiated in scene.
      */
     GLTFMaterialBuilder(TextureCache * textureCache, ph::rt::Scene * scene, const tinygltf::Model * model, const std::vector<ph::RawImage> * images);
 
@@ -32,11 +32,6 @@ public:
      *
      */
     virtual ~GLTFMaterialBuilder() = default;
-
-    /**
-     * The scene this builder is operating on.
-     */
-    ph::rt::Scene * getScene() { return _scene; }
 
     /**
      * The tinygltf model who's items are being instantiated in scene.

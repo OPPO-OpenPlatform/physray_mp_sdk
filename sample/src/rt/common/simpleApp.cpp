@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #include "pch.h"
@@ -106,7 +106,7 @@ void SimpleApp::construct(const ConstructParameters & cp) {
 
     if (_cp.dcp.instance) {
         // use external VK instance.
-        _cp.rayQuery = ph::rt::setupDeviceConstructionForRayQuery(_cp.dcp, _cp.rayQuery);
+        _cp.rayQuery = _cp.dcp.setupForRayQuery(_cp.rayQuery);
     } else {
         // Override validation level using environment/system variable.
 #if PH_ANDROID
@@ -124,7 +124,7 @@ void SimpleApp::construct(const ConstructParameters & cp) {
         }
 
         // Setup constructions parameters for ray query.
-        _cp.rayQuery = ph::rt::setupDeviceConstructionForRayQuery(_cp.dcp, _cp.rayQuery);
+        _cp.rayQuery = _cp.dcp.setupForRayQuery(_cp.rayQuery);
 
         // create instance
         _inst.reset(new SimpleVulkanInstance(_cp.icp));

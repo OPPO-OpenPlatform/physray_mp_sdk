@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -188,6 +188,8 @@ public:
     /// A non-null center sets the camera to orbital mode. A null center pointer sets the camera to fly-through mode.
     FirstPersonController & setOrbitalCenter(const Eigen::Vector3f * center);
 
+    FirstPersonController & setOrbitalCenter(const Eigen::Vector3f & center) { return setOrbitalCenter(&center); }
+
     /// Set desired orbital radius. The actual radius will be updated by the built-in interpolator
     /// when update() is called.
     FirstPersonController & setTargetOrbitalRadius(float r);
@@ -205,14 +207,14 @@ public:
         if (r < _maximalRadius)
             _minimalRadius = r;
         else
-            PH_LOGW("Did not set min radius %d which was larger than max radius %d.", r, _maximalRadius);
+            PH_LOGW("Did not set min radius %f which was larger than max radius %f.", r, _maximalRadius);
         return *this;
     }
     FirstPersonController & setMaximalOrbitalRadius(float r) {
         if (r > _minimalRadius)
             _maximalRadius = r;
         else
-            PH_LOGW("Did not set max radius %d which was smaller than min radius %d.", r, _minimalRadius);
+            PH_LOGW("Did not set max radius %f which was smaller than min radius %f.", r, _minimalRadius);
         return *this;
     }
 
@@ -235,7 +237,7 @@ public:
         float limit = orbiting() ? PI : HALF_PI;
         if ((minMaxPitch.x() > minMaxPitch.y()) || (minMaxPitch.x() < -limit) || (minMaxPitch.y() > limit))
             PH_LOGW(
-                "Failed to set min pitch %d and max pitch %d. Min pitch must be less than max pitch. Min pitch must be greater than -PI and max pitch must be less than PI.",
+                "Failed to set min pitch %f and max pitch %f. Min pitch must be less than max pitch. Min pitch must be greater than -PI and max pitch must be less than PI.",
                 minMaxPitch.x(), minMaxPitch.y());
         else
             _pitchLimits = minMaxPitch;
@@ -245,7 +247,7 @@ public:
         float limit = orbiting() ? PI : HALF_PI;
         if ((minMaxRoll.x() > minMaxRoll.y()) || (minMaxRoll.x() < -limit) || (minMaxRoll.y() > limit))
             PH_LOGW(
-                "Failed to set min roll %d and max roll %d. Min roll must be less than max roll. Min roll must be greater than -PI and max roll must be less than PI.",
+                "Failed to set min roll %f and max roll %f. Min roll must be less than max roll. Min roll must be greater than -PI and max roll must be less than PI.",
                 minMaxRoll.x(), minMaxRoll.y());
         else
             _rollLimits = minMaxRoll;
@@ -274,7 +276,7 @@ public:
     /// Returns the world transformation of this controller (from local space to world/parent).
     /// If you need the world-to-view transform, use inverse of this.
     /// This value is refreshed by and only by the update() method.
-    const ph::rt::NodeTransform & getWorldTransform() const { return _worldTransform; }
+    const sg::Transform & getWorldTransform() const { return _worldTransform; }
 
     void onKeyPress(Key k, bool pressed);
     void onMouseMove(float x, float y, float z = 0.f);
@@ -318,7 +320,7 @@ private:
     Eigen::Vector3f _angle = {0, 0, 0};
 
     /// local to world/parent space transformation
-    ph::rt::NodeTransform _worldTransform = Eigen::AffineCompact3f::Identity();
+    sg::Transform _worldTransform = Eigen::AffineCompact3f::Identity();
 
     // orbital specific fields
     std::optional<Eigen::Vector3f> _orbitalCenter {}; // no orbital point by default.

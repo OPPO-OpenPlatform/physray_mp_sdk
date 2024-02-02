@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -85,9 +88,9 @@ private:
      * The Transform channels will eventually be passed to a shared pointer inside of the timeline,
      * so this class doesn't have to worry about deleting them.
      */
-    std::unordered_map<ph::rt::Node *, ::animations::TransformChannel *> _nodeToTransformChannel;
+    std::unordered_map<sg::Node *, ::animations::TransformChannel *> _nodeToTransformChannel;
 
-    std::unordered_map<ph::rt::Node *, ::animations::WeightChannel *> _nodeToWeightChannel;
+    std::unordered_map<sg::Node *, ::animations::WeightChannel *> _nodeToWeightChannel;
 
     /**
      * Converts tinygltf animation channel to its equivelant ph

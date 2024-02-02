@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "gltf-material-builder.h"
 
@@ -80,7 +83,7 @@ ph::rt::Material * GLTFMaterialBuilder::build(const tinygltf::Material & materia
     phMaterialDesc.maps[(std::size_t) ph::rt::Material::TextureType::ORM] = getOrmTextureHandle(material);
 
     // Create the material and return it.
-    auto phMaterial = _scene->create(material.name, phMaterialDesc);
+    auto phMaterial = _scene->world()->create(material.name, phMaterialDesc);
     return phMaterial;
 }
 

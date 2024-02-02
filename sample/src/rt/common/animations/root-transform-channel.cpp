@@ -1,22 +1,25 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #include "pch.h"
 #include "root-transform-channel.h"
 
 namespace animations {
 
-RootTransformChannel::RootTransformChannel(ph::rt::Node * root, ph::rt::Node * target)
-    : TransformChannel(target, Eigen::Vector3f(), Eigen::Quaternionf(), Eigen::Vector3f()), _root(root) {
+RootTransformChannel::RootTransformChannel(sg::Node * root, sg::Node * target)
+    : TransformChannel(target, Eigen::Vector3f::Zero(), Eigen::Quaternionf::Identity(), Eigen::Vector3f::Zero()), _root(root) {
     // Retrieve the root's world transform.
-    const ph::rt::NodeTransform rootWorldTransform = root->worldTransform();
+    const sg::Transform rootWorldTransform = root->worldTransform();
 
     // Retrieve the target's world transform.
-    const ph::rt::NodeTransform targetWorldTransform = target->worldTransform();
+    const sg::Transform targetWorldTransform = target->worldTransform();
 
     // Determine what the target's transform is relative to root space.
-    const ph::rt::NodeTransform targetRootTransform = rootWorldTransform.inverse() * targetWorldTransform;
+    const sg::Transform targetRootTransform = rootWorldTransform.inverse() * targetWorldTransform;
 
     // Decompose the transform's current values so we can initialize
     // this transform channel's properties to them.
@@ -37,7 +40,7 @@ RootTransformChannel::RootTransformChannel(ph::rt::Node * root, ph::rt::Node * t
     setScale(Eigen::Vector3f {scaling(0, 0), scaling(1, 1), scaling(2, 2)});
 }
 
-RootTransformChannel::RootTransformChannel(ph::rt::Node * root, ph::rt::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation,
+RootTransformChannel::RootTransformChannel(sg::Node * root, sg::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation,
                                            const Eigen::Vector3f & scale)
     : TransformChannel(target, translation, rotation, scale), _root(root) {
     //
@@ -46,7 +49,7 @@ RootTransformChannel::RootTransformChannel(ph::rt::Node * root, ph::rt::Node * t
 void RootTransformChannel::setTime(std::chrono::duration<uint64_t, std::nano>) {
     // Calculate the node transform from the separated transforms.
     // Make sure the transform is initialized to identity.
-    ph::rt::NodeTransform nodeTransform = ph::rt::NodeTransform::Identity();
+    sg::Transform nodeTransform = sg::Transform::Identity();
 
     // Combine everything into the transform by order of translate, rotate, scale.
     nodeTransform.translate(getTranslation());
@@ -54,13 +57,13 @@ void RootTransformChannel::setTime(std::chrono::duration<uint64_t, std::nano>) {
     nodeTransform.scale(getScale());
 
     // Get the root's world transform.
-    ph::rt::NodeTransform rootWorldTransform = _root->worldTransform();
+    sg::Transform rootWorldTransform = _root->worldTransform();
 
     // Add the transform to root space.
-    ph::rt::NodeTransform targetWorldTransform = rootWorldTransform * nodeTransform;
+    sg::Transform targetWorldTransform = rootWorldTransform * nodeTransform;
 
     // Fetch the target being transformed.
-    ph::rt::Node * target = getTarget();
+    sg::Node * target = getTarget();
 
     // Update the target node to its new transform.
     target->setWorldTransform(targetWorldTransform);

@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -26,7 +29,7 @@ namespace animations {
  *
  * After the other channels update this channel's
  * translation, rotation, and scale, it can then apply
- * those to the targted node.
+ * those to the targeted node.
  */
 class TransformChannel : public ::animations::Channel {
 public:
@@ -39,7 +42,7 @@ public:
      * by decomposing its transform.
      * @param target The node this channel will animate.
      */
-    TransformChannel(ph::rt::Node * target);
+    TransformChannel(sg::Node * target);
 
     /**
      * @param target The node who's transform is
@@ -49,7 +52,7 @@ public:
      * @param rotation Starting rotation.
      * @param scale Starting scale.
      */
-    TransformChannel(ph::rt::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation, const Eigen::Vector3f & scale);
+    TransformChannel(sg::Node * target, const Eigen::Vector3f & translation, const Eigen::Quaternionf & rotation, const Eigen::Vector3f & scale);
 
     /**
      *
@@ -60,7 +63,7 @@ public:
      * @return The node who's transform is
      * being updated by the animation.
      */
-    ph::rt::Node * getTarget() { return _target; }
+    sg::Node * getTarget() { return _target; }
 
     /**
      * @return Translation the target will be set to.
@@ -102,7 +105,7 @@ private:
      * The node who's transform is
      * being updated by the animation.
      */
-    ph::rt::Node * _target;
+    sg::Node * _target;
 
     /**
      * Translation the target will be set to.

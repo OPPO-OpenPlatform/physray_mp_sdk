@@ -1,10 +1,11 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
 
 #include <ph/va.h>
+#include "scene-graph.h"
 
 /// --------------------------------------------------------------------------------------------------------------------
 ///
@@ -30,7 +31,7 @@ struct Camera {
     /// distance of far plane
     float zFar = 10000.0f;
 
-    ph::rt::Node * node = nullptr;
+    sg::Node * node = nullptr;
 
     /// Calculate projection matrix of the camera.
     /// \param displayW display width in pixels
@@ -51,7 +52,7 @@ struct Camera {
         return proj;
     }
 
-    ph::rt::NodeTransform worldTransform() {
+    sg::Transform worldTransform() {
         if (node == nullptr) {
             return {};
         } else {

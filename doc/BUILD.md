@@ -40,4 +40,3 @@ Other than visual studio, all of the dependencies can be installed via winget:
   ```
 
 Once all dependencies are installed, run the [build-win64.cmd] to build.
-

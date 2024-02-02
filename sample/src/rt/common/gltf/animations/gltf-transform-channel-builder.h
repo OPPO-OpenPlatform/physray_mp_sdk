@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 
 #include <ph/rt-utils.h>
@@ -320,7 +323,7 @@ private:
             // this, resulting in undefined behavior.
             if (keyValueTimeSeconds < 0) {
                 PH_LOGW("Animation input accessor element at index "
-                        "%llu is negative: %f.",
+                        "%zu is negative: %f.",
                         frameIndex, keyValueTimeSeconds);
 
                 // Skip this invalid key time.

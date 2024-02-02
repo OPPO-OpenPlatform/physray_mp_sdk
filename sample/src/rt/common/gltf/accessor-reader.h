@@ -1,7 +1,10 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
+/**
+ *
+ */
 #pragma once
 #include <ph/rt-utils.h>
 
@@ -581,7 +584,7 @@ private:
             std::ostringstream stringStream;
             stringStream << "Unsupported accessor componentType ";
             stringStream << componentType;
-            PH_THROW(stringStream.str().c_str());
+            PH_THROW("%s", stringStream.str().c_str());
             break;
         }
     }

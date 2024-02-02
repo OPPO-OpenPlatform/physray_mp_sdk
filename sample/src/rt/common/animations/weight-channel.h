@@ -1,5 +1,5 @@
 /*****************************************************************************
- * Copyright (C) 2020 - 2023 OPPO. All rights reserved.
+ * Copyright (C) 2020 - 2024 OPPO. All rights reserved.
  *******************************************************************************/
 
 #pragma once
@@ -25,13 +25,13 @@ public:
      * by decomposing its transform.
      * @param target The node this channel will animate.
      */
-    WeightChannel(ph::rt::Node * target, MorphTargetManager * morphTargetManager);
+    WeightChannel(sg::Node * target, MorphTargetManager * morphTargetManager);
 
     /**
      * @param target The node this channel will animate.
      * @param weights Starting weights
      */
-    WeightChannel(ph::rt::Node * target, MorphTargetManager * morphTargetManager, const std::vector<float> weights);
+    WeightChannel(sg::Node * target, MorphTargetManager * morphTargetManager, const std::vector<float> weights);
 
     /**
      *
@@ -42,7 +42,7 @@ public:
      * @return The node who's transform is
      * being updated by the animation.
      */
-    ph::rt::Node * getTarget() { return _target; }
+    sg::Node * getTarget() { return _target; }
 
     const std::vector<float> & getWeights() const { return _weights; }
     void                       setWeights(const std::vector<float> & weights) { _weights = weights; }
@@ -59,7 +59,7 @@ private:
      * The node whose mesh has blend weights
      * being updated by the animation.
      */
-    ph::rt::Node * _target;
+    sg::Node * _target;
 
     const ph::rt::Mesh * _mesh;
 
